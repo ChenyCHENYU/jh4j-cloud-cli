@@ -8,6 +8,8 @@ import type { CatalogFile, CatalogTemplate, UserConfig } from "./types.js";
 const siblingTemplatePath = fileURLToPath(
   new URL("../../jh4j-ui-template/", import.meta.url)
 );
+const remoteTemplateSource =
+  "git@github.com:ChenyCHENYU/jh4j-ui-template.git";
 
 export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
   {
@@ -16,7 +18,9 @@ export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
     description: "Vue 3 + Vite + Module Federation 标准业务子系统",
     category: "frontend",
     sourceEnvironment: TEMPLATE_SOURCE_ENV,
-    defaultSource: siblingTemplatePath,
+    defaultSource: existsSync(siblingTemplatePath)
+      ? siblingTemplatePath
+      : remoteTemplateSource,
     defaultRef: "main",
     status: "beta",
     tags: ["vue", "vite", "module-federation", "pc"]

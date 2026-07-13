@@ -19,6 +19,7 @@ import type {
   CatalogTemplate,
   CreateOptions,
   ProjectInput,
+  TemplateManifest,
   UserConfig
 } from "../types.js";
 
@@ -89,12 +90,78 @@ async function loadCreateConfig(
   return readJson<PartialProjectInput>(resolved);
 }
 
+function parseFeatureIds(value: string): string[] {
+  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
+}
+
+async function collectTemplateFeatures(
+  manifest: TemplateManifest,
+  fileConfig: PartialProjectInput,
+  options: CreateOptions
+): Promise<string[]> {
+  const available = manifest.features ?? [];
+  if (!available.length) return [];
+
+  const knownIds = new Set(available.map((feature) => feature.id));
+  let selected = options.features
+    ? parseFeatureIds(options.features)
+    : Array.isArray(fileConfig.features)
+      ? fileConfig.features
+      : available
+          .filter((feature) => feature.defaultEnabled || feature.required)
+          .map((feature) => feature.id);
+
+  const unknown = selected.filter((id) => !knownIds.has(id));
+  if (unknown.length) {
+    throw new Error(
+      `模板不支持以下能力: ${unknown.join(", ")}。可用能力: ${[...knownIds].join(", ")}`
+    );
+  }
+
+  if (options.standards === false) {
+    selected = selected.filter((id) => {
+      const feature = available.find((item) => item.id === id);
+      return feature?.package !== "@robot-admin/git-standards";
+    });
+  }
+
+  if (!options.yes) {
+    const selectable = available.filter(
+      (feature) =>
+        options.standards !== false ||
+        feature.package !== "@robot-admin/git-standards"
+    );
+    if (selectable.length) {
+      const answer = await prompts.multiselect({
+        message: "选择项目标准化能力",
+        options: selectable.map((feature) => ({
+          value: feature.id,
+          label: feature.name,
+          hint: `${feature.description}${feature.package ? ` · ${feature.package}` : ""}`
+        })),
+        initialValues: selected,
+        required: false
+      });
+      if (cancelled(answer)) throw new Error("用户取消创建");
+      selected = answer.map(String);
+    }
+  }
+
+  for (const feature of available) {
+    if (feature.required && !selected.includes(feature.id)) {
+      selected.push(feature.id);
+    }
+  }
+  return selected;
+}
+
 async function collectProjectInput(
   projectName: string,
   sourceConfig: ProjectInput,
   fileConfig: PartialProjectInput,
   options: CreateOptions,
-  userConfig: UserConfig
+  userConfig: UserConfig,
+  features: string[]
 ): Promise<ProjectInput> {
   let moduleName = options.module ?? fileConfig.moduleName ?? inferModuleName(projectName);
   let title = options.title ?? fileConfig.title ?? sourceConfig.title;
@@ -125,7 +192,7 @@ async function collectProjectInput(
     moduleName = await askText("模块标识", moduleName);
     title = await askText("系统标题", title);
     port = await askText("开发端口", String(port));
-    npmRegistry = await askText("公共 npm registry", npmRegistry);
+    npmRegistry = await askText("npm registry", npmRegistry);
     jhlcRegistry = await askText("@jhlc 私有 registry", jhlcRegistry);
     localBackendUrl = await askText("本地后端地址", localBackendUrl);
     localPublicUrl = await askText("本地 public 地址", localPublicUrl);
@@ -166,11 +233,12 @@ async function collectProjectInput(
     moduleName: ensureModuleName(moduleName),
     title: title.trim(),
     devServerPort: ensurePort(port),
-    npmRegistry: ensureHttpUrl(npmRegistry, "公共 npm registry"),
+    npmRegistry: ensureHttpUrl(npmRegistry, "npm registry"),
     jhlcRegistry: ensureHttpUrl(jhlcRegistry, "@jhlc 私有 registry"),
     localBackendUrl: ensureHttpUrl(localBackendUrl, "本地后端地址"),
     localPublicUrl: ensureHttpUrl(localPublicUrl, "本地 public 地址"),
-    environments
+    environments,
+    features
   };
 }
 
@@ -215,6 +283,7 @@ export interface GenerateProjectResult {
   templateId: string;
   templateVersion: string;
   source: string;
+  features: string[];
   installed: boolean;
   gitInitialized: boolean;
 }
@@ -272,6 +341,7 @@ export async function generateProject(
       Omit<ProjectInput, "npmRegistry" | "jhlcRegistry">
     >(path.join(acquired.root, "project.config.json"));
     const fileConfig = await loadCreateConfig(options.config, resolvedCwd);
+    const features = await collectTemplateFeatures(manifest, fileConfig, options);
     const input = await collectProjectInput(
       projectName,
       {
@@ -281,7 +351,8 @@ export async function generateProject(
       },
       fileConfig,
       options,
-      userConfig
+      userConfig,
+      features
     );
 
     const shouldInstall = !options.skipInstall && userConfig.autoInstall;
@@ -295,6 +366,7 @@ export async function generateProject(
           `目标: ${targetRoot}`,
           `模块: ${input.moduleName}`,
           `端口: ${input.devServerPort}`,
+          `能力: ${input.features.length ? input.features.join(", ") : "无可选能力"}`,
           `安装依赖: ${shouldInstall ? "是" : "否"}`,
           `初始化 Git: ${shouldInitializeGit ? "是" : "否"}`
         ].join("\n"),
@@ -305,6 +377,7 @@ export async function generateProject(
         templateId: manifest.id,
         templateVersion: manifest.version,
         source: acquired.source,
+        features: input.features,
         installed: false,
         gitInitialized: false
       };
@@ -336,6 +409,15 @@ export async function generateProject(
     await promoteStaging(stagingRoot, targetRoot, Boolean(options.force));
     promoted = true;
 
+    let gitInitialized = false;
+    if (shouldInitializeGit) {
+      await runCommand("git", ["init", "-b", "main"], {
+        cwd: targetRoot,
+        stdio: "pipe"
+      });
+      gitInitialized = true;
+    }
+
     if (shouldInstall) {
       try {
         await runCommand("pnpm", ["install"], { cwd: targetRoot });
@@ -346,19 +428,17 @@ export async function generateProject(
       }
     }
 
-    let gitInitialized = false;
     if (shouldInitializeGit) {
-      await runCommand("git", ["init", "-b", "main"], {
-        cwd: targetRoot,
-        stdio: "pipe"
-      });
-      gitInitialized = true;
       await runCommand("git", ["add", "-A"], { cwd: targetRoot, stdio: "pipe" });
       try {
         await runCommand(
           "git",
           ["commit", "-m", `feat(init): 基于 ${manifest.id}@${manifest.version} 初始化`],
-          { cwd: targetRoot, stdio: "pipe" }
+          {
+            cwd: targetRoot,
+            stdio: "pipe",
+            env: { HUSKY: "0" }
+          }
         );
       } catch (error) {
         prompts.log.warn(`Git 已初始化，但初始提交未完成：${(error as Error).message}`);
@@ -370,6 +450,7 @@ export async function generateProject(
       templateId: manifest.id,
       templateVersion: manifest.version,
       source: acquired.source,
+      features: input.features,
       installed: shouldInstall,
       gitInitialized
     };

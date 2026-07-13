@@ -49,13 +49,41 @@ describe("project generator", () => {
     expect(config.devServerPort).toBe(8123);
     expect(metadata.template).toEqual({
       id: "web.jh4j-mf-remote",
-      version: "1.0.0"
+      version: "1.1.0"
     });
-    expect(metadata.createdBy).toBe("@jhlc/jh4j-cloud-cli@0.2.0");
+    expect(metadata.createdBy).toBe("@jhlc/jh4j-cloud-cli@0.3.0");
+    expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(existsSync(path.join(target, "src", "views", "orders"))).toBe(true);
     expect(existsSync(path.join(target, "src", "views", "template"))).toBe(false);
     expect(existsSync(path.join(target, "node_modules"))).toBe(false);
     expect(existsSync(path.join(target, ".git"))).toBe(false);
+  });
+
+  it("can disable the complete Git standards bundle", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "jh4j-cli-no-standards-"));
+    temporaryRoots.push(cwd);
+
+    const result = await generateProject(
+      findTemplate(await loadCatalog()),
+      "jh4j-ui-plain",
+      {
+        yes: true,
+        standards: false,
+        skipInstall: true,
+        skipGit: true
+      },
+      cwd
+    );
+    const target = path.join(cwd, "jh4j-ui-plain");
+    const pkg = JSON.parse(
+      await readFile(path.join(target, "package.json"), "utf8")
+    );
+
+    expect(result.features).toEqual([]);
+    expect(pkg.devDependencies["@robot-admin/git-standards"]).toBeUndefined();
+    expect(existsSync(path.join(target, ".husky"))).toBe(false);
+    expect(existsSync(path.join(target, "commitlint.config.js"))).toBe(false);
+    expect(existsSync(path.join(target, "pnpm-lock.yaml"))).toBe(false);
   });
 
   it("does not write files in dry-run mode", async () => {

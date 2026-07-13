@@ -17,6 +17,15 @@ export interface TemplateDefaults {
   jhlcRegistry: string;
 }
 
+export interface TemplateFeature {
+  id: string;
+  name: string;
+  description: string;
+  defaultEnabled: boolean;
+  required?: boolean;
+  package?: string;
+}
+
 export interface TemplateManifest {
   schemaVersion: number;
   id: string;
@@ -26,6 +35,7 @@ export interface TemplateManifest {
   category: TemplateCategory;
   runtime: TemplateRuntime;
   defaults: TemplateDefaults;
+  features?: TemplateFeature[];
   entry: {
     interactive: string;
     nonInteractive: string;
@@ -72,10 +82,14 @@ export interface ProjectInput {
   npmRegistry: string;
   jhlcRegistry: string;
   environments: Record<string, { webUrl: string; apiPrefix: string }>;
+  features: string[];
 }
 
 export interface CreateOptions {
+  category?: TemplateCategory;
   template?: string;
+  features?: string;
+  standards?: boolean;
   source?: string;
   ref?: string;
   module?: string;
