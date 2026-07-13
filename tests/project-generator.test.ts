@@ -51,7 +51,7 @@ describe("project generator", () => {
       id: "web.jh4j-mf-remote",
       version: "1.1.0"
     });
-    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.3.0");
+    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.4.0");
     expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(existsSync(path.join(target, "src", "views", "orders"))).toBe(true);
     expect(existsSync(path.join(target, "src", "views", "template"))).toBe(false);
@@ -84,6 +84,50 @@ describe("project generator", () => {
     expect(existsSync(path.join(target, ".husky"))).toBe(false);
     expect(existsSync(path.join(target, "commitlint.config.js"))).toBe(false);
     expect(existsSync(path.join(target, "pnpm-lock.yaml"))).toBe(false);
+  });
+
+  it("creates a configured mobile H5 project", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "jh4j-cli-mobile-"));
+    temporaryRoots.push(cwd);
+    const mobileTemplate = findTemplate(await loadCatalog(), "mobile.robot-h5");
+
+    const result = await generateProject(
+      mobileTemplate,
+      "jh4j-mobile-orders",
+      {
+        yes: true,
+        title: "移动订单中心",
+        port: "8899",
+        localBackend: "http://localhost:18080",
+        skipInstall: true,
+        skipGit: true
+      },
+      cwd
+    );
+    const target = path.join(cwd, "jh4j-mobile-orders");
+    const config = JSON.parse(
+      await readFile(path.join(target, "project.config.json"), "utf8")
+    );
+    const metadata = JSON.parse(
+      await readFile(path.join(target, ".jhlc", "project.json"), "utf8")
+    );
+    const developmentEnv = await readFile(
+      path.join(target, ".env.development"),
+      "utf8"
+    );
+
+    expect(result.templateId).toBe("mobile.robot-h5");
+    expect(result.templateVersion).toBe("1.6.0");
+    expect(config.projectName).toBe("jh4j-mobile-orders");
+    expect(config.title).toBe("移动订单中心");
+    expect(config.devServerPort).toBe(8899);
+    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.4.0");
+    expect(metadata.parameters.features).toEqual(["git-standards"]);
+    expect(developmentEnv).toContain("VITE_PORT = 8899");
+    expect(developmentEnv).toContain("VITE_GLOB_APP_ID = jh4j-mobile-orders");
+    expect(developmentEnv).toContain("http://localhost:18080/api");
+    expect(existsSync(path.join(target, "node_modules"))).toBe(false);
+    expect(existsSync(path.join(target, ".git"))).toBe(false);
   });
 
   it("does not write files in dry-run mode", async () => {

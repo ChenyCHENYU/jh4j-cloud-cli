@@ -46,7 +46,7 @@ describe("external catalog", () => {
       ...DEFAULT_USER_CONFIG,
       catalogFile
     });
-    expect(catalog).toHaveLength(2);
+    expect(catalog).toHaveLength(3);
     const pcTemplate = findTemplate(catalog, "web.jh4j-mf-remote");
     expect(pcTemplate.status).toBe("stable");
     expect(pcTemplate.defaultSource).toBe(
@@ -59,5 +59,9 @@ describe("external catalog", () => {
     expect(findTemplate(catalog, "service.jh4j-spring-cloud").category).toBe(
       "backend"
     );
+    expect(findTemplate(catalog, "mobile.robot-h5").sources).toEqual([
+      "https://github.com/ChenyCHENYU/Robot_H5.git",
+      "https://gitee.com/ycyplus163/robot_-h5.git"
+    ]);
   });
 });

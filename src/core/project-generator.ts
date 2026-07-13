@@ -160,6 +160,7 @@ async function collectTemplateFeatures(
 
 async function collectProjectInput(
   projectName: string,
+  manifest: TemplateManifest,
   sourceConfig: ProjectInput,
   fileConfig: PartialProjectInput,
   options: CreateOptions,
@@ -192,29 +193,41 @@ async function collectProjectInput(
   }
 
   if (!options.yes) {
-    moduleName = await askText("模块标识", moduleName);
-    title = await askText("系统标题", title);
+    if (manifest.category !== "mobile") {
+      moduleName = await askText("模块标识", moduleName);
+    }
+    title = await askText(
+      manifest.category === "mobile" ? "应用标题" : "系统标题",
+      title
+    );
     port = await askText("开发端口", String(port));
     npmRegistry = await askText("npm registry", npmRegistry);
     jhlcRegistry = await askText("@jhlc 私有 registry", jhlcRegistry);
-    localBackendUrl = await askText("本地后端地址", localBackendUrl);
-    localPublicUrl = await askText("本地 public 地址", localPublicUrl);
+    localBackendUrl = await askText(
+      manifest.category === "mobile" ? "本地 API 地址" : "本地后端地址",
+      localBackendUrl
+    );
+    if (manifest.category !== "mobile") {
+      localPublicUrl = await askText("本地 public 地址", localPublicUrl);
+    }
 
-    const configureEnvironments = await prompts.confirm({
-      message: "是否逐项确认五套环境地址",
-      initialValue: false
-    });
-    if (cancelled(configureEnvironments)) throw new Error("用户取消创建");
-    if (configureEnvironments) {
-      for (const env of ENV_NAMES) {
-        environments[env].webUrl = await askText(
-          `${env.toUpperCase()} 平台地址`,
-          environments[env].webUrl
-        );
-        environments[env].apiPrefix = await askText(
-          `${env.toUpperCase()} API 前缀`,
-          environments[env].apiPrefix
-        );
+    if (manifest.category !== "mobile") {
+      const configureEnvironments = await prompts.confirm({
+        message: "是否逐项确认五套环境地址",
+        initialValue: false
+      });
+      if (cancelled(configureEnvironments)) throw new Error("用户取消创建");
+      if (configureEnvironments) {
+        for (const env of ENV_NAMES) {
+          environments[env].webUrl = await askText(
+            `${env.toUpperCase()} 平台地址`,
+            environments[env].webUrl
+          );
+          environments[env].apiPrefix = await askText(
+            `${env.toUpperCase()} API 前缀`,
+            environments[env].apiPrefix
+          );
+        }
       }
     }
   }
@@ -347,6 +360,7 @@ export async function generateProject(
     const features = await collectTemplateFeatures(manifest, fileConfig, options);
     const input = await collectProjectInput(
       projectName,
+      manifest,
       {
         ...sourceProjectConfig,
         npmRegistry: manifest.defaults.npmRegistry,

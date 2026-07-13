@@ -4,7 +4,11 @@ import { collectDoctorChecks } from "../src/commands/doctor.js";
 describe("doctor", () => {
   it("recognizes the local development environment", async () => {
     const checks = await collectDoctorChecks();
-    expect(checks).toHaveLength(5);
+    expect(checks).toHaveLength(6);
     expect(checks.every((check) => check.ok)).toBe(true);
+    expect(checks.map((check) => check.name)).toContain(
+      "模板 web.jh4j-mf-remote"
+    );
+    expect(checks.map((check) => check.name)).toContain("模板 mobile.robot-h5");
   });
 });

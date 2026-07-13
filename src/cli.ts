@@ -35,7 +35,7 @@ export function createProgram(): Command {
     .option("--features <ids>", "启用的模板能力，多个 ID 使用逗号分隔")
     .option("--no-standards", "不启用模板提供的 Git/代码标准化能力")
     .option("--source <path-or-url>", "覆盖模板源（本地目录或 Git URL）")
-    .option("--ref <branch-or-tag>", "Git 分支或标签", "main")
+    .option("--ref <branch-or-tag>", "Git 分支或标签；默认使用模板 Catalog 配置")
     .option("--module <name>", "平台模块标识")
     .option("--title <title>", "系统标题")
     .option("--port <port>", "开发端口")

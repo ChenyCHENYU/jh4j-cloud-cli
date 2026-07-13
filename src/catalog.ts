@@ -8,9 +8,16 @@ import type { CatalogFile, CatalogTemplate, UserConfig } from "./types.js";
 const siblingTemplatePath = fileURLToPath(
   new URL("../../jh4j-ui-template/", import.meta.url)
 );
+const siblingMobileTemplatePath = fileURLToPath(
+  new URL("../../../Robot_H5/", import.meta.url)
+);
 const remoteTemplateSources = [
   "https://github.com/ChenyCHENYU/jh4j-ui-template.git",
   "https://gitee.com/ycyplus163/jh4j-ui-template.git"
+];
+const remoteMobileTemplateSources = [
+  "https://github.com/ChenyCHENYU/Robot_H5.git",
+  "https://gitee.com/ycyplus163/robot_-h5.git"
 ];
 
 export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
@@ -27,6 +34,20 @@ export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
     defaultRef: "main",
     status: "beta",
     tags: ["vue", "vite", "module-federation", "pc"]
+  },
+  {
+    id: "mobile.robot-h5",
+    name: "JH4J 移动端 H5 模板",
+    description: "Vue 3 + Vite 7 + Vant 4 企业级移动端 H5 应用",
+    category: "mobile",
+    sourceEnvironment: TEMPLATE_SOURCE_ENV,
+    defaultSource: existsSync(siblingMobileTemplatePath)
+      ? siblingMobileTemplatePath
+      : remoteMobileTemplateSources[0],
+    sources: remoteMobileTemplateSources,
+    defaultRef: "v1.6.0",
+    status: "beta",
+    tags: ["vue", "vite", "vant", "h5", "mobile"]
   }
 ];
 

@@ -20,6 +20,15 @@ const templates: CatalogTemplate[] = [
     defaultSource: ".",
     defaultRef: "main",
     status: "beta"
+  },
+  {
+    id: "mobile.robot-h5",
+    name: "H5",
+    description: "mobile",
+    category: "mobile",
+    defaultSource: ".",
+    defaultRef: "v1.6.0",
+    status: "beta"
   }
 ];
 
@@ -31,6 +40,8 @@ describe("template category selection", () => {
     expect(templatesByCategory(templates, "backend").map((item) => item.id)).toEqual([
       "service.jh4j-spring-cloud"
     ]);
-    expect(templatesByCategory(templates, "mobile")).toEqual([]);
+    expect(templatesByCategory(templates, "mobile").map((item) => item.id)).toEqual([
+      "mobile.robot-h5"
+    ]);
   });
 });
