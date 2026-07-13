@@ -1,9 +1,12 @@
 import * as prompts from "@clack/prompts";
+import { styleText } from "node:util";
 import { findTemplate, loadCatalog } from "../catalog.js";
 import {
   generateProject,
-  normalizeProjectName
+  normalizeProjectName,
+  type GenerateProjectResult
 } from "../core/project-generator.js";
+import { UserCancelledError } from "../core/errors.js";
 import { loadUserConfig } from "../core/user-config.js";
 import type {
   CatalogTemplate,
@@ -11,17 +14,22 @@ import type {
   TemplateCategory
 } from "../types.js";
 
-const CATEGORY_OPTIONS: Array<{
-  value: TemplateCategory;
-  label: string;
-}> = [
-  { value: "frontend", label: "PC 前端 · Vue 3 / 微前端" },
-  { value: "backend", label: "后端服务 · Java / 云原生" },
-  { value: "mobile", label: "移动端 H5 · Vue 3 / Vant" }
-];
+const TEMPLATE_PRESENTATION: Record<
+  TemplateCategory,
+  {
+    label: string;
+    hint: string;
+  }
+> = {
+  frontend: { label: "PC 管理端", hint: "Vue 3 · Vite · 微前端" },
+  backend: { label: "后端服务", hint: "Java · Spring Cloud · 云原生" },
+  mobile: { label: "移动端 H5", hint: "Vue 3 · Vite 7 · Vant 4" }
+};
+
+export type CreationMode = "quick" | "custom";
 
 function isCategory(value: string): value is TemplateCategory {
-  return CATEGORY_OPTIONS.some((item) => item.value === value);
+  return Object.hasOwn(TEMPLATE_PRESENTATION, value);
 }
 
 export function templatesByCategory(
@@ -31,12 +39,33 @@ export function templatesByCategory(
   return templates.filter((template) => template.category === category);
 }
 
-export function categoryOptionsFor(
+export function templateOptionsFor(
   templates: CatalogTemplate[]
-): Array<{ value: TemplateCategory; label: string }> {
-  return CATEGORY_OPTIONS.filter(
-    (item) => templatesByCategory(templates, item.value).length > 0
-  ).map(({ value, label }) => ({ value, label }));
+): Array<{ value: string; label: string; hint: string }> {
+  return templates.map((template) => ({
+    value: template.id,
+    label: TEMPLATE_PRESENTATION[template.category].label,
+    hint: TEMPLATE_PRESENTATION[template.category].hint
+  }));
+}
+
+export function creationModeOptions(): Array<{
+  value: CreationMode;
+  label: string;
+  hint: string;
+}> {
+  return [
+    {
+      value: "quick",
+      label: "快速创建（推荐）",
+      hint: "采用模板推荐配置，立即生成"
+    },
+    {
+      value: "custom",
+      label: "自定义创建",
+      hint: "设置项目名、标题、端口和联调地址"
+    }
+  ];
 }
 
 export function defaultProjectNameFor(category: TemplateCategory): string {
@@ -61,43 +90,6 @@ export function projectNamePromptOptions(
   };
 }
 
-async function selectCategory(
-  templates: CatalogTemplate[],
-  requestedCategory: string | undefined,
-  nonInteractive: boolean
-): Promise<TemplateCategory> {
-  if (requestedCategory) {
-    if (!isCategory(requestedCategory)) {
-      throw new Error(
-        `项目类型无效: ${requestedCategory}。可用值: frontend、backend、mobile`
-      );
-    }
-    if (!templatesByCategory(templates, requestedCategory).length) {
-      throw new Error(`项目类型 ${requestedCategory} 暂无可用模板`);
-    }
-    return requestedCategory;
-  }
-
-  const firstAvailable = CATEGORY_OPTIONS.find(
-    (item) => templatesByCategory(templates, item.value).length > 0
-  );
-  if (!firstAvailable) throw new Error("Catalog 中没有可用模板");
-  if (nonInteractive) return firstAvailable.value;
-
-  const availableOptions = categoryOptionsFor(templates);
-  if (availableOptions.length === 1) return availableOptions[0].value;
-
-  const selected = await prompts.select({
-    message: "选择项目类型",
-    options: availableOptions.map((item) => ({
-      value: item.value,
-      label: item.label
-    }))
-  });
-  if (prompts.isCancel(selected)) throw new Error("用户取消创建");
-  return selected as TemplateCategory;
-}
-
 async function selectTemplate(
   templates: CatalogTemplate[],
   options: CreateOptions
@@ -112,63 +104,127 @@ async function selectTemplate(
     return selected;
   }
 
-  const category = await selectCategory(
-    templates,
-    options.category,
-    Boolean(options.yes)
-  );
-  const candidates = templatesByCategory(templates, category);
-  if (options.yes) return findTemplate(candidates);
-  if (candidates.length === 1) {
-    const selected = candidates[0];
-    prompts.log.info(`使用模板：${selected.name}`);
-    return selected;
+  if (options.category && !isCategory(options.category)) {
+    throw new Error(
+      `项目类型无效: ${options.category}。可用值: frontend、backend、mobile`
+    );
   }
+  const candidates = options.category
+    ? templatesByCategory(templates, options.category)
+    : templates;
+  if (!candidates.length) {
+    throw new Error(
+      options.category
+        ? `项目类型 ${options.category} 暂无可用模板`
+        : "Catalog 中没有可用模板"
+    );
+  }
+  if (options.yes) return findTemplate(candidates);
+  if (candidates.length === 1) return candidates[0];
 
   const selected = await prompts.select({
     message: "选择项目模板",
-    options: candidates.map((template) => ({
-      value: template.id,
-      label: `${template.name} · ${template.description}`
-    }))
+    options: templateOptionsFor(candidates),
+    initialValue: candidates[0].id
   });
-  if (prompts.isCancel(selected)) throw new Error("用户取消创建");
+  if (prompts.isCancel(selected)) throw new UserCancelledError();
   return findTemplate(candidates, String(selected));
 }
 
-export async function createCommand(
+async function selectCreationMode(options: CreateOptions): Promise<CreationMode> {
+  if (options.yes) return "quick";
+  const selected = await prompts.select({
+    message: "选择创建方式",
+    options: creationModeOptions(),
+    initialValue: "quick"
+  });
+  if (prompts.isCancel(selected)) throw new UserCancelledError();
+  return selected as CreationMode;
+}
+
+function presetsFor(
+  category: TemplateCategory,
+  features: string[]
+): string[] {
+  const presets =
+    category === "mobile"
+      ? [
+          "Vue 3 / Vite 7 / Vant 4 / TypeScript",
+          "@robot-h5/core 移动端核心能力"
+        ]
+      : category === "frontend"
+        ? [
+            "Vue 3 / Vite / Module Federation",
+            "@jhlc/common-core 企业基础能力"
+          ]
+        : ["Java / Spring Cloud 企业服务基础能力"];
+  if (features.includes("git-standards")) {
+    presets.push("Git 提交规范、代码检查与 Git Hooks");
+  }
+  presets.push("DEV / SIT / UAT / PRE / PRD 多环境配置");
+  return presets;
+}
+
+export function buildCompletionContent(
+  projectName: string,
+  mode: CreationMode,
+  result: GenerateProjectResult
+): string {
+  const nextSteps = [
+    `1. cd ${projectName}`,
+    ...(!result.installed ? ["2. pnpm install", "3. pnpm dev"] : ["2. pnpm dev"])
+  ];
+  return [
+    `项目：${projectName}`,
+    `模板：${result.templateName} · v${result.templateVersion}`,
+    `方式：${mode === "quick" ? "快速创建" : "自定义创建"}`,
+    `标题：${result.configuration.title}`,
+    `开发：http://localhost:${result.configuration.devServerPort}`,
+    `联调：${result.configuration.localBackendUrl}`,
+    "",
+    "已预设",
+    ...presetsFor(result.category, result.features).map((item) => `  ✓ ${item}`),
+    `  ${result.gitInitialized ? "✓ Git main 仓库已初始化" : "○ 未初始化 Git 仓库"}`,
+    `  ${result.installed ? "✓ 项目依赖已安装" : "○ 项目依赖未安装（按需手动安装）"}`,
+    "",
+    "下一步",
+    ...nextSteps.map((step) => `  ${step}`),
+    "",
+    "配置：project.config.json / .env*"
+  ].join("\n");
+}
+
+async function executeCreateCommand(
   requestedName: string | undefined,
   options: CreateOptions
 ): Promise<void> {
-  prompts.intro("JH4J Cloud 项目创建");
   const userConfig = await loadUserConfig();
   const catalog = await loadCatalog(userConfig);
   const template = await selectTemplate(catalog, options);
+  const mode = await selectCreationMode(options);
 
   const defaultProjectName = defaultProjectNameFor(template.category);
   let rawProjectName = requestedName;
-  if (!rawProjectName && !options.yes) {
+  if (mode === "custom" && !rawProjectName && !options.yes) {
     const answer = await prompts.text(
       projectNamePromptOptions(template.category)
     );
-    if (prompts.isCancel(answer)) throw new Error("用户取消创建");
+    if (prompts.isCancel(answer)) throw new UserCancelledError();
     rawProjectName = String(answer).trim() || defaultProjectName;
   }
   rawProjectName ??= defaultProjectName;
-  let projectName = rawProjectName;
-  projectName = normalizeProjectName(rawProjectName);
+  const projectName = normalizeProjectName(rawProjectName);
   if (!projectName) {
     throw new Error("项目名称至少需要包含一个字母或数字");
   }
   if (projectName !== rawProjectName) {
     prompts.log.info(`项目名称已规范化：${projectName}`);
   }
-  prompts.log.info("其余配置使用模板默认值，生成后可在项目内修改");
 
   const result = await generateProject(
     template,
     projectName,
-    options,
+    { ...options, customize: mode === "custom" },
     process.cwd(),
     userConfig
   );
@@ -177,16 +233,33 @@ export async function createCommand(
     return;
   }
 
-  prompts.log.success(
-    `已创建 ${projectName}（${result.templateId}@${result.templateVersion}）`
+  prompts.box(
+    buildCompletionContent(projectName, mode, result),
+    styleText(["bold", "green"], " JH4J 项目已就绪 "),
+    {
+      rounded: true,
+      width: "auto",
+      titleAlign: "center",
+      withGuide: false,
+      formatBorder: (value) => styleText("green", value)
+    }
   );
-  prompts.outro(
-    [
-      `cd ${projectName}`,
-      ...(!result.installed ? ["pnpm install"] : []),
-      "pnpm dev",
-      "",
-      "配置：project.config.json / .npmrc / .env*"
-    ].join("\n")
-  );
+  prompts.outro(styleText("green", "创建完成，按上面的步骤启动项目"));
+}
+
+export async function createCommand(
+  requestedName: string | undefined,
+  options: CreateOptions
+): Promise<void> {
+  const brand = styleText(["bold", "black", "bgCyan"], " JH4J CLOUD ");
+  prompts.intro(`${brand}  创建标准项目`);
+  try {
+    await executeCreateCommand(requestedName, options);
+  } catch (error) {
+    if (error instanceof UserCancelledError) {
+      prompts.cancel("已取消创建，未写入任何项目文件");
+      return;
+    }
+    throw error;
+  }
 }

@@ -60,7 +60,7 @@ describe("project generator", () => {
       id: "web.jh4j-mf-remote",
       version: "1.1.0"
     });
-    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.5.1");
+    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.6.0");
     expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(existsSync(path.join(target, "src", "views", "orders"))).toBe(true);
     expect(existsSync(path.join(target, "src", "views", "template"))).toBe(false);
@@ -130,7 +130,7 @@ describe("project generator", () => {
     expect(config.projectName).toBe("jh4j-mobile-orders");
     expect(config.title).toBe("移动订单中心");
     expect(config.devServerPort).toBe(8899);
-    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.5.1");
+    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.6.0");
     expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(developmentEnv).toContain("VITE_PORT = 8899");
     expect(developmentEnv).toContain("VITE_GLOB_APP_ID = jh4j-mobile-orders");

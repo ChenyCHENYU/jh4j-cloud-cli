@@ -1,6 +1,7 @@
+import * as prompts from "@clack/prompts";
 import { runCli } from "./cli.js";
 
 runCli().catch((error) => {
-  console.error(`\n错误: ${(error as Error).message}\n`);
+  prompts.cancel(`操作失败：${(error as Error).message}`);
   process.exitCode = 1;
 });

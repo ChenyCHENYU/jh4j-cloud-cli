@@ -16,6 +16,7 @@ import {
   acquireTemplateFromSources,
   resolveTemplateSources
 } from "./template-source.js";
+import { UserCancelledError } from "./errors.js";
 import { loadTemplateManifest } from "./template-manifest.js";
 import { DEFAULT_USER_CONFIG } from "./user-config.js";
 import type {
@@ -82,6 +83,21 @@ function ensureHttpUrl(value: string, label: string): string {
   } catch {
     throw new Error(`${label} 必须是 http/https URL`);
   }
+}
+
+async function askText(
+  message: string,
+  initialValue: string,
+  validate?: (value: string | undefined) => string | undefined
+): Promise<string> {
+  const answer = await prompts.text({
+    message,
+    initialValue,
+    defaultValue: initialValue,
+    validate
+  });
+  if (prompts.isCancel(answer)) throw new UserCancelledError();
+  return String(answer).trim() || initialValue;
 }
 
 async function loadCreateConfig(
@@ -170,6 +186,28 @@ async function collectProjectInput(
     }
   }
 
+  if (options.customize && !options.yes) {
+    title = await askText("应用标题", title, (value) =>
+      value?.trim() ? undefined : "应用标题不能为空"
+    );
+    port = await askText("开发端口", String(port), (value) => {
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535
+        ? undefined
+        : "请输入 1024 到 65535 之间的端口";
+    });
+    localBackendUrl = await askText("本地联调地址", localBackendUrl, (value) => {
+      try {
+        const url = new URL(value ?? "");
+        return url.protocol === "http:" || url.protocol === "https:"
+          ? undefined
+          : "请输入完整的 http/https 地址";
+      } catch {
+        return "请输入完整的 http/https 地址";
+      }
+    });
+  }
+
   if (!title.trim()) throw new Error("系统标题不能为空");
   for (const env of ENV_NAMES) {
     if (!environments[env]) throw new Error(`缺少 ${env.toUpperCase()} 环境配置`);
@@ -235,11 +273,17 @@ async function promoteStaging(
 export interface GenerateProjectResult {
   targetRoot: string;
   templateId: string;
+  templateName: string;
   templateVersion: string;
+  category: TemplateManifest["category"];
   source: string;
   features: string[];
   installed: boolean;
   gitInitialized: boolean;
+  configuration: Pick<
+    ProjectInput,
+    "title" | "moduleName" | "devServerPort" | "localBackendUrl"
+  >;
 }
 
 export async function generateProject(
@@ -270,7 +314,7 @@ export async function generateProject(
   );
   const acquisitionSpinner = options.yes
     ? undefined
-    : prompts.spinner({ indicator: "timer" });
+    : prompts.spinner({ indicator: "dots" });
   acquisitionSpinner?.start("正在获取并校验模板");
   let acquired: Awaited<ReturnType<typeof acquireTemplateFromSources>>;
   try {
@@ -278,7 +322,7 @@ export async function generateProject(
       noCache: options.cache === false,
       cacheTtlMinutes: userConfig.cacheTtlMinutes
     });
-    acquisitionSpinner?.stop("模板准备完成");
+    acquisitionSpinner?.stop("模板已就绪");
   } catch (error) {
     acquisitionSpinner?.error("模板获取失败");
     throw error;
@@ -288,6 +332,7 @@ export async function generateProject(
     `.${projectName}.jh4j-tmp-${process.pid}-${Date.now()}`
   );
   let promoted = false;
+  let generationSpinner: ReturnType<typeof prompts.spinner> | undefined;
 
   try {
     const manifest = await loadTemplateManifest(acquired.root);
@@ -341,14 +386,26 @@ export async function generateProject(
       return {
         targetRoot,
         templateId: manifest.id,
+        templateName: manifest.name,
         templateVersion: manifest.version,
+        category: manifest.category,
         source: acquired.source,
         features: input.features,
         installed: false,
-        gitInitialized: false
+        gitInitialized: false,
+        configuration: {
+          title: input.title,
+          moduleName: input.moduleName,
+          devServerPort: input.devServerPort,
+          localBackendUrl: input.localBackendUrl
+        }
       };
     }
 
+    generationSpinner = options.yes
+      ? undefined
+      : prompts.spinner({ indicator: "dots" });
+    generationSpinner?.start("正在生成项目文件");
     await copyTemplateTree(acquired.root, stagingRoot);
     const inputFile = path.join(stagingRoot, ".jh4j-cli-input.json");
     await writeJson(inputFile, input);
@@ -377,6 +434,7 @@ export async function generateProject(
 
     let gitInitialized = false;
     if (shouldInitializeGit) {
+      generationSpinner?.message("正在初始化 Git main 仓库");
       await runCommand("git", ["init", "-b", "main"], {
         cwd: targetRoot,
         stdio: "pipe"
@@ -385,8 +443,12 @@ export async function generateProject(
     }
 
     if (shouldInstall) {
+      generationSpinner?.message("正在安装项目依赖");
       try {
-        await runCommand("pnpm", ["install"], { cwd: targetRoot });
+        await runCommand("pnpm", ["install"], {
+          cwd: targetRoot,
+          stdio: "pipe"
+        });
       } catch (error) {
         throw new Error(
           `项目已生成，但依赖安装失败；目录已保留在 ${targetRoot}\n${(error as Error).message}`
@@ -394,7 +456,9 @@ export async function generateProject(
       }
     }
 
+    let initialCommitWarning: string | undefined;
     if (shouldInitializeGit) {
+      generationSpinner?.message("正在创建初始提交");
       await runCommand("git", ["add", "-A"], { cwd: targetRoot, stdio: "pipe" });
       try {
         await runCommand(
@@ -407,19 +471,35 @@ export async function generateProject(
           }
         );
       } catch (error) {
-        prompts.log.warn(`Git 已初始化，但初始提交未完成：${(error as Error).message}`);
+        initialCommitWarning = `Git 已初始化，但初始提交未完成：${(error as Error).message}`;
       }
     }
+
+    generationSpinner?.stop("项目文件初始化完成");
+    if (initialCommitWarning) prompts.log.warn(initialCommitWarning);
 
     return {
       targetRoot,
       templateId: manifest.id,
+      templateName: manifest.name,
       templateVersion: manifest.version,
+      category: manifest.category,
       source: acquired.source,
       features: input.features,
       installed: shouldInstall,
-      gitInitialized
+      gitInitialized,
+      configuration: {
+        title: input.title,
+        moduleName: input.moduleName,
+        devServerPort: input.devServerPort,
+        localBackendUrl: input.localBackendUrl
+      }
     };
+  } catch (error) {
+    generationSpinner?.error(
+      promoted ? "项目已生成，后续步骤未完成" : "项目生成失败"
+    );
+    throw error;
   } finally {
     if (!promoted && existsSync(stagingRoot)) await removePath(stagingRoot);
     await acquired.cleanup();

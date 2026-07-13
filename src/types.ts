@@ -108,6 +108,7 @@ export interface CreateOptions {
   skipGit?: boolean;
   force?: boolean;
   cache?: boolean;
+  customize?: boolean;
 }
 
 export interface ProjectMetadata {
