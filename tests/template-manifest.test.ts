@@ -2,6 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { loadTemplateManifest } from "../src/core/template-manifest.js";
+import { findTemplate, loadCatalog } from "../src/catalog.js";
 
 const templateRoot = fileURLToPath(
   new URL("../../jh4j-ui-template/", import.meta.url)
@@ -14,5 +15,10 @@ describe("template manifest", () => {
     expect(manifest.version).toBe("1.0.0");
     expect(manifest.runtime.recommendedNode).toBe("24");
     expect(path.basename(templateRoot)).toBe("jh4j-ui-template");
+  });
+
+  it("loads the built-in catalog", async () => {
+    const catalog = await loadCatalog();
+    expect(findTemplate(catalog).id).toBe("web.jh4j-mf-remote");
   });
 });

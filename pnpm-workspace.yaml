@@ -1,5 +1,7 @@
 strictPeerDependencies: false
-minimumReleaseAge: 0
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - "@jhlc/*"
 
 allowBuilds:
   esbuild: true

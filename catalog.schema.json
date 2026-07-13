@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:jh4j:schema:template-catalog:1",
+  "title": "JH4J Template Catalog",
+  "type": "object",
+  "required": ["schemaVersion", "templates"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "category",
+          "defaultSource",
+          "defaultRef",
+          "status"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9.-]+$" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "category": { "enum": ["frontend", "backend", "mobile"] },
+          "defaultSource": { "type": "string", "minLength": 1 },
+          "sourceEnvironment": { "type": "string" },
+          "defaultRef": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["stable", "beta"] },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

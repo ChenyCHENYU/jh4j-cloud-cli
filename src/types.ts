@@ -38,10 +38,28 @@ export interface CatalogTemplate {
   name: string;
   description: string;
   category: TemplateCategory;
-  sourceEnvironment: string;
-  developmentPath: string;
+  sourceEnvironment?: string;
+  defaultSource: string;
   defaultRef: string;
   status: "stable" | "beta";
+  tags?: string[];
+}
+
+export interface CatalogFile {
+  schemaVersion: number;
+  templates: CatalogTemplate[];
+}
+
+export interface UserConfig {
+  schemaVersion: number;
+  catalogFile?: string;
+  templateSource?: string;
+  templateRef?: string;
+  npmRegistry?: string;
+  jhlcRegistry?: string;
+  autoInstall: boolean;
+  autoGit: boolean;
+  cacheTtlMinutes: number;
 }
 
 export interface ProjectInput {
@@ -67,11 +85,13 @@ export interface CreateOptions {
   jhlcRegistry?: string;
   localBackend?: string;
   localPublic?: string;
+  config?: string;
   yes?: boolean;
   dryRun?: boolean;
   skipInstall?: boolean;
   skipGit?: boolean;
   force?: boolean;
+  cache?: boolean;
 }
 
 export interface ProjectMetadata {
@@ -81,4 +101,13 @@ export interface ProjectMetadata {
   createdAt: string;
   createdBy: string;
   parameters: Record<string, unknown>;
+}
+
+export interface TemplateCacheMetadata {
+  schemaVersion: number;
+  source: string;
+  ref: string;
+  cachedAt: string;
+  templateId?: string;
+  templateVersion?: string;
 }

@@ -1,15 +1,31 @@
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { rename, rm } from "node:fs/promises";
 import path from "node:path";
 import * as prompts from "@clack/prompts";
+import { satisfies } from "semver";
 import { CLI_NAME, CLI_VERSION } from "../constants.js";
-import { copyTemplateTree, isDirectoryEmpty, readJson, removePath, writeJson } from "../utils/fs.js";
+import {
+  copyTemplateTree,
+  isDirectoryEmpty,
+  readJson,
+  removePath,
+  writeJson
+} from "../utils/fs.js";
 import { runCommand } from "../utils/process.js";
 import { acquireTemplate, resolveTemplateSource } from "./template-source.js";
 import { loadTemplateManifest } from "./template-manifest.js";
-import type { CatalogTemplate, CreateOptions, ProjectInput } from "../types.js";
+import { DEFAULT_USER_CONFIG } from "./user-config.js";
+import type {
+  CatalogTemplate,
+  CreateOptions,
+  ProjectInput,
+  UserConfig
+} from "../types.js";
 
 const ENV_NAMES = ["dev", "sit", "uat", "pre", "prd"] as const;
+type PartialProjectInput = Partial<Omit<ProjectInput, "environments">> & {
+  environments?: Partial<ProjectInput["environments"]>;
+};
 
 function cancelled(value: unknown): value is symbol {
   return prompts.isCancel(value);
@@ -47,25 +63,63 @@ function ensurePort(value: string | number): number {
   return port;
 }
 
+function ensureHttpUrl(value: string, label: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
+    return value.replace(/\/+$/, "");
+  } catch {
+    throw new Error(`${label} 必须是 http/https URL`);
+  }
+}
+
 async function askText(message: string, initialValue: string): Promise<string> {
   const answer = await prompts.text({ message, initialValue });
   if (cancelled(answer)) throw new Error("用户取消创建");
   return String(answer).trim() || initialValue;
 }
 
+async function loadCreateConfig(
+  configFile: string | undefined,
+  cwd: string
+): Promise<PartialProjectInput> {
+  if (!configFile) return {};
+  const resolved = path.resolve(cwd, configFile);
+  if (!existsSync(resolved)) throw new Error(`创建配置文件不存在: ${resolved}`);
+  return readJson<PartialProjectInput>(resolved);
+}
+
 async function collectProjectInput(
   projectName: string,
-  defaults: ProjectInput,
-  options: CreateOptions
+  sourceConfig: ProjectInput,
+  fileConfig: PartialProjectInput,
+  options: CreateOptions,
+  userConfig: UserConfig
 ): Promise<ProjectInput> {
-  let moduleName = options.module ?? inferModuleName(projectName);
-  let title = options.title ?? defaults.title;
-  let port: string | number = options.port ?? defaults.devServerPort;
-  let npmRegistry = options.npmRegistry ?? defaults.npmRegistry;
-  let jhlcRegistry = options.jhlcRegistry ?? defaults.jhlcRegistry;
-  let localBackendUrl = options.localBackend ?? defaults.localBackendUrl;
-  let localPublicUrl = options.localPublic ?? defaults.localPublicUrl;
-  const environments = structuredClone(defaults.environments);
+  let moduleName = options.module ?? fileConfig.moduleName ?? inferModuleName(projectName);
+  let title = options.title ?? fileConfig.title ?? sourceConfig.title;
+  let port: string | number =
+    options.port ?? fileConfig.devServerPort ?? sourceConfig.devServerPort;
+  let npmRegistry =
+    options.npmRegistry ??
+    fileConfig.npmRegistry ??
+    userConfig.npmRegistry ??
+    sourceConfig.npmRegistry;
+  let jhlcRegistry =
+    options.jhlcRegistry ??
+    fileConfig.jhlcRegistry ??
+    userConfig.jhlcRegistry ??
+    sourceConfig.jhlcRegistry;
+  let localBackendUrl =
+    options.localBackend ?? fileConfig.localBackendUrl ?? sourceConfig.localBackendUrl;
+  let localPublicUrl =
+    options.localPublic ?? fileConfig.localPublicUrl ?? sourceConfig.localPublicUrl;
+  const environments = structuredClone(sourceConfig.environments);
+  for (const [env, value] of Object.entries(fileConfig.environments ?? {})) {
+    if (value && environments[env]) {
+      environments[env] = { ...environments[env], ...value };
+    }
+  }
 
   if (!options.yes) {
     moduleName = await askText("模块标识", moduleName);
@@ -95,22 +149,64 @@ async function collectProjectInput(
     }
   }
 
+  if (!title.trim()) throw new Error("系统标题不能为空");
+  for (const env of ENV_NAMES) {
+    if (!environments[env]) throw new Error(`缺少 ${env.toUpperCase()} 环境配置`);
+    environments[env] = {
+      webUrl: ensureHttpUrl(environments[env].webUrl, `${env.toUpperCase()} 平台地址`),
+      apiPrefix: environments[env].apiPrefix.replace(/^\/+|\/+$/g, "")
+    };
+    if (!environments[env].apiPrefix) {
+      throw new Error(`${env.toUpperCase()} API 前缀不能为空`);
+    }
+  }
+
   return {
     projectName,
     moduleName: ensureModuleName(moduleName),
     title: title.trim(),
     devServerPort: ensurePort(port),
-    npmRegistry,
-    jhlcRegistry,
-    localBackendUrl,
-    localPublicUrl,
+    npmRegistry: ensureHttpUrl(npmRegistry, "公共 npm registry"),
+    jhlcRegistry: ensureHttpUrl(jhlcRegistry, "@jhlc 私有 registry"),
+    localBackendUrl: ensureHttpUrl(localBackendUrl, "本地后端地址"),
+    localPublicUrl: ensureHttpUrl(localPublicUrl, "本地 public 地址"),
     environments
   };
 }
 
 function assertSafeTarget(cwd: string, target: string): void {
   if (path.dirname(target) !== cwd || target === cwd) {
-    throw new Error("首期仅允许在当前目录创建一级项目目录");
+    throw new Error("仅允许在当前目录创建一级项目目录");
+  }
+}
+
+async function promoteStaging(
+  stagingRoot: string,
+  targetRoot: string,
+  force: boolean
+): Promise<void> {
+  const targetExists = existsSync(targetRoot);
+  if (!targetExists) {
+    await rename(stagingRoot, targetRoot);
+    return;
+  }
+
+  if (!(await isDirectoryEmpty(targetRoot)) && !force) {
+    throw new Error(`目标目录已存在且非空: ${targetRoot}`);
+  }
+
+  const backupRoot = `${targetRoot}.jh4j-backup-${Date.now()}`;
+  await rename(targetRoot, backupRoot);
+  try {
+    await rename(stagingRoot, targetRoot);
+  } catch (error) {
+    await rename(backupRoot, targetRoot);
+    throw error;
+  }
+  try {
+    await removePath(backupRoot);
+  } catch {
+    prompts.log.warn(`旧目录备份未能自动清理: ${backupRoot}`);
   }
 }
 
@@ -119,21 +215,45 @@ export interface GenerateProjectResult {
   templateId: string;
   templateVersion: string;
   source: string;
+  installed: boolean;
+  gitInitialized: boolean;
 }
 
 export async function generateProject(
   catalogTemplate: CatalogTemplate,
   requestedProjectName: string,
   options: CreateOptions,
-  cwd = process.cwd()
+  cwd = process.cwd(),
+  configuredUserConfig: UserConfig = DEFAULT_USER_CONFIG
 ): Promise<GenerateProjectResult> {
+  const userConfig = { ...DEFAULT_USER_CONFIG, ...configuredUserConfig };
   const projectName = ensureProjectName(requestedProjectName);
-  const targetRoot = path.resolve(cwd, projectName);
-  assertSafeTarget(path.resolve(cwd), targetRoot);
+  const resolvedCwd = path.resolve(cwd);
+  const targetRoot = path.resolve(resolvedCwd, projectName);
+  assertSafeTarget(resolvedCwd, targetRoot);
+  if (
+    existsSync(targetRoot) &&
+    !(await isDirectoryEmpty(targetRoot)) &&
+    !options.force
+  ) {
+    throw new Error(`目标目录已存在且非空: ${targetRoot}`);
+  }
 
-  const sourceValue = resolveTemplateSource(catalogTemplate, options.source);
-  const acquired = await acquireTemplate(sourceValue, options.ref ?? catalogTemplate.defaultRef);
-  let generated = false;
+  const ref = options.ref ?? userConfig.templateRef ?? catalogTemplate.defaultRef;
+  const sourceValue = resolveTemplateSource(
+    catalogTemplate,
+    options.source,
+    userConfig.templateSource
+  );
+  const acquired = await acquireTemplate(sourceValue, ref, {
+    noCache: options.cache === false,
+    cacheTtlMinutes: userConfig.cacheTtlMinutes
+  });
+  const stagingRoot = path.join(
+    resolvedCwd,
+    `.${projectName}.jh4j-tmp-${process.pid}-${Date.now()}`
+  );
+  let promoted = false;
 
   try {
     const manifest = await loadTemplateManifest(acquired.root);
@@ -142,18 +262,30 @@ export async function generateProject(
         `模板 ID 不匹配：Catalog=${catalogTemplate.id}，Manifest=${manifest.id}`
       );
     }
-    const sourceConfig = await readJson<ProjectInput>(
-      path.join(acquired.root, "project.config.json")
-    );
+    if (!satisfies(process.versions.node, manifest.runtime.node)) {
+      throw new Error(
+        `当前 Node ${process.versions.node} 不满足模板要求 ${manifest.runtime.node}`
+      );
+    }
+
+    const sourceProjectConfig = await readJson<
+      Omit<ProjectInput, "npmRegistry" | "jhlcRegistry">
+    >(path.join(acquired.root, "project.config.json"));
+    const fileConfig = await loadCreateConfig(options.config, resolvedCwd);
     const input = await collectProjectInput(
       projectName,
       {
-        ...sourceConfig,
+        ...sourceProjectConfig,
         npmRegistry: manifest.defaults.npmRegistry,
         jhlcRegistry: manifest.defaults.jhlcRegistry
       },
-      options
+      fileConfig,
+      options,
+      userConfig
     );
+
+    const shouldInstall = !options.skipInstall && userConfig.autoInstall;
+    const shouldInitializeGit = !options.skipGit && userConfig.autoGit;
 
     if (options.dryRun) {
       prompts.note(
@@ -163,8 +295,8 @@ export async function generateProject(
           `目标: ${targetRoot}`,
           `模块: ${input.moduleName}`,
           `端口: ${input.devServerPort}`,
-          `安装依赖: ${options.skipInstall ? "否" : "是"}`,
-          `初始化 Git: ${options.skipGit ? "否" : "是"}`
+          `安装依赖: ${shouldInstall ? "是" : "否"}`,
+          `初始化 Git: ${shouldInitializeGit ? "是" : "否"}`
         ].join("\n"),
         "Dry Run"
       );
@@ -172,45 +304,55 @@ export async function generateProject(
         targetRoot,
         templateId: manifest.id,
         templateVersion: manifest.version,
-        source: acquired.source
+        source: acquired.source,
+        installed: false,
+        gitInitialized: false
       };
     }
 
-    if (existsSync(targetRoot)) {
-      if (options.force) {
-        await removePath(targetRoot);
-      } else if (!(await isDirectoryEmpty(targetRoot))) {
-        throw new Error(`目标目录已存在且非空: ${targetRoot}`);
-      }
-    }
-
-    await copyTemplateTree(acquired.root, targetRoot);
-    const inputFile = path.join(targetRoot, ".jh4j-cli-input.json");
+    await copyTemplateTree(acquired.root, stagingRoot);
+    const inputFile = path.join(stagingRoot, ".jh4j-cli-input.json");
     await writeJson(inputFile, input);
     try {
       await runCommand(
         process.execPath,
         [
-          path.join(targetRoot, "scripts", "setup-project.mjs"),
+          path.join(stagingRoot, "scripts", "setup-project.mjs"),
           "--yes",
           "--config",
           inputFile,
           "--created-by",
           `${CLI_NAME}@${CLI_VERSION}`
         ],
-        { cwd: targetRoot }
+        { cwd: stagingRoot, stdio: "pipe" }
       );
     } finally {
       await rm(inputFile, { force: true });
     }
-    generated = true;
 
-    if (!options.skipInstall) {
-      await runCommand("pnpm", ["install"], { cwd: targetRoot });
+    if (!existsSync(path.join(stagingRoot, manifest.generatedMetadata))) {
+      throw new Error(`模板初始化未生成元数据: ${manifest.generatedMetadata}`);
+    }
+    await promoteStaging(stagingRoot, targetRoot, Boolean(options.force));
+    promoted = true;
+
+    if (shouldInstall) {
+      try {
+        await runCommand("pnpm", ["install"], { cwd: targetRoot });
+      } catch (error) {
+        throw new Error(
+          `项目已生成，但依赖安装失败；目录已保留在 ${targetRoot}\n${(error as Error).message}`
+        );
+      }
     }
 
-    if (!options.skipGit) {
-      await runCommand("git", ["init", "-b", "main"], { cwd: targetRoot, stdio: "pipe" });
+    let gitInitialized = false;
+    if (shouldInitializeGit) {
+      await runCommand("git", ["init", "-b", "main"], {
+        cwd: targetRoot,
+        stdio: "pipe"
+      });
+      gitInitialized = true;
       await runCommand("git", ["add", "-A"], { cwd: targetRoot, stdio: "pipe" });
       try {
         await runCommand(
@@ -227,14 +369,12 @@ export async function generateProject(
       targetRoot,
       templateId: manifest.id,
       templateVersion: manifest.version,
-      source: acquired.source
+      source: acquired.source,
+      installed: shouldInstall,
+      gitInitialized
     };
-  } catch (error) {
-    if (!generated && existsSync(targetRoot)) {
-      await removePath(targetRoot);
-    }
-    throw error;
   } finally {
+    if (!promoted && existsSync(stagingRoot)) await removePath(stagingRoot);
     await acquired.cleanup();
   }
 }

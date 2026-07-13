@@ -1,39 +1,74 @@
 import { existsSync } from "node:fs";
-import { BUILTIN_TEMPLATES } from "../catalog.js";
-import { SUPPORTED_NODE_MAJORS } from "../constants.js";
+import { mkdir, writeFile, rm } from "node:fs/promises";
+import path from "node:path";
+import { coerce, gte, satisfies } from "semver";
+import { loadCatalog } from "../catalog.js";
 import { loadTemplateManifest } from "../core/template-manifest.js";
 import { resolveTemplateSource } from "../core/template-source.js";
+import { getJh4jHome, loadUserConfig } from "../core/user-config.js";
 import { inspectCommand } from "../utils/process.js";
+import type { CatalogTemplate, UserConfig } from "../types.js";
 
-interface CheckResult {
+export interface CheckResult {
   name: string;
   ok: boolean;
   detail: string;
 }
 
-export async function collectDoctorChecks(): Promise<CheckResult[]> {
-  const nodeMajor = Number(process.versions.node.split(".")[0]);
-  const [git, pnpm] = await Promise.all([
+async function checkHomeWritable(): Promise<CheckResult> {
+  const home = getJh4jHome();
+  const probe = path.join(home, `.write-probe-${process.pid}`);
+  try {
+    await mkdir(home, { recursive: true });
+    await writeFile(probe, "ok", "utf8");
+    await rm(probe, { force: true });
+    return { name: "JH4J_HOME", ok: true, detail: home };
+  } catch (error) {
+    return { name: "JH4J_HOME", ok: false, detail: (error as Error).message };
+  }
+}
+
+export async function collectDoctorChecks(
+  suppliedConfig?: UserConfig,
+  suppliedCatalog?: CatalogTemplate[]
+): Promise<CheckResult[]> {
+  const config = suppliedConfig ?? (await loadUserConfig());
+  const catalog = suppliedCatalog ?? (await loadCatalog(config));
+  const [git, pnpm, home] = await Promise.all([
     inspectCommand("git"),
-    inspectCommand("pnpm")
+    inspectCommand("pnpm"),
+    checkHomeWritable()
   ]);
+  const pnpmVersion = coerce(pnpm.output)?.version;
   const checks: CheckResult[] = [
     {
       name: "Node.js",
-      ok: SUPPORTED_NODE_MAJORS.has(nodeMajor),
+      ok: satisfies(process.versions.node, "^22.12.0 || ^24.0.0"),
       detail: `${process.versions.node}（要求 Node 22.12+ 或 24.x）`
     },
     { name: "Git", ok: git.ok, detail: git.output },
-    { name: "pnpm", ok: pnpm.ok, detail: pnpm.output }
+    {
+      name: "pnpm",
+      ok: pnpm.ok && Boolean(pnpmVersion && gte(pnpmVersion, "11.8.0")),
+      detail: pnpm.output
+    },
+    home
   ];
 
-  for (const template of BUILTIN_TEMPLATES) {
-    const source = resolveTemplateSource(template);
+  for (const template of catalog) {
+    const source = resolveTemplateSource(
+      template,
+      undefined,
+      config.templateSource
+    );
     if (!existsSync(source)) {
       checks.push({
         name: `模板 ${template.id}`,
-        ok: source.startsWith("http") || source.startsWith("git@"),
-        detail: source
+        ok:
+          source.startsWith("http://") ||
+          source.startsWith("https://") ||
+          source.startsWith("git@"),
+        detail: `远程源（创建时验证）: ${source}`
       });
       continue;
     }
@@ -41,7 +76,9 @@ export async function collectDoctorChecks(): Promise<CheckResult[]> {
       const manifest = await loadTemplateManifest(source);
       checks.push({
         name: `模板 ${template.id}`,
-        ok: manifest.id === template.id,
+        ok:
+          manifest.id === template.id &&
+          satisfies(process.versions.node, manifest.runtime.node),
         detail: `${manifest.id}@${manifest.version} (${source})`
       });
     } catch (error) {
@@ -55,12 +92,16 @@ export async function collectDoctorChecks(): Promise<CheckResult[]> {
   return checks;
 }
 
-export async function doctorCommand(): Promise<void> {
+export async function doctorCommand(options: { json?: boolean } = {}): Promise<void> {
   const checks = await collectDoctorChecks();
-  for (const check of checks) {
-    console.log(`${check.ok ? "✓" : "✗"} ${check.name}: ${check.detail}`);
-  }
   const failed = checks.filter((check) => !check.ok);
-  console.log(`\n结果: ${checks.length - failed.length} 通过, ${failed.length} 失败`);
+  if (options.json) {
+    console.log(JSON.stringify({ ok: failed.length === 0, checks }, null, 2));
+  } else {
+    for (const check of checks) {
+      console.log(`${check.ok ? "✓" : "✗"} ${check.name}: ${check.detail}`);
+    }
+    console.log(`\n结果: ${checks.length - failed.length} 通过, ${failed.length} 失败`);
+  }
   if (failed.length) process.exitCode = 1;
 }
