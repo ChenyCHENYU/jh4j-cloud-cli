@@ -1,0 +1,18 @@
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
+import { loadTemplateManifest } from "../src/core/template-manifest.js";
+
+const templateRoot = fileURLToPath(
+  new URL("../../jh4j-ui-template/", import.meta.url)
+);
+
+describe("template manifest", () => {
+  it("loads the standalone PC template contract", async () => {
+    const manifest = await loadTemplateManifest(templateRoot);
+    expect(manifest.id).toBe("web.jh4j-mf-remote");
+    expect(manifest.version).toBe("1.0.0");
+    expect(manifest.runtime.recommendedNode).toBe("24");
+    expect(path.basename(templateRoot)).toBe("jh4j-ui-template");
+  });
+});

@@ -1,0 +1,41 @@
+{
+  "name": "@jhlc/jh4j-cloud-cli",
+  "version": "0.1.0",
+  "description": "JH4J Cloud 企业内部标准化项目脚手架",
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0",
+    "pnpm": ">=11.8.0"
+  },
+  "packageManager": "pnpm@11.8.0",
+  "bin": {
+    "jh4j": "bin/jh4j.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "prepack": "pnpm check"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0",
+    "commander": "^15.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "tsup": "8.5.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}
