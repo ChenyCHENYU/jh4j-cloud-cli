@@ -4,7 +4,7 @@ import path from "node:path";
 import { coerce, gte, satisfies } from "semver";
 import { loadCatalog } from "../catalog.js";
 import { loadTemplateManifest } from "../core/template-manifest.js";
-import { resolveTemplateSource } from "../core/template-source.js";
+import { resolveTemplateSources } from "../core/template-source.js";
 import { getJh4jHome, loadUserConfig } from "../core/user-config.js";
 import { inspectCommand } from "../utils/process.js";
 import type { CatalogTemplate, UserConfig } from "../types.js";
@@ -56,11 +56,12 @@ export async function collectDoctorChecks(
   ];
 
   for (const template of catalog) {
-    const source = resolveTemplateSource(
+    const sources = resolveTemplateSources(
       template,
       undefined,
       config.templateSource
     );
+    const source = sources[0];
     if (!existsSync(source)) {
       checks.push({
         name: `模板 ${template.id}`,
@@ -68,7 +69,7 @@ export async function collectDoctorChecks(
           source.startsWith("http://") ||
           source.startsWith("https://") ||
           source.startsWith("git@"),
-        detail: `远程源（创建时验证）: ${source}`
+        detail: `远程候选源（创建时依次验证）: ${sources.join(" → ")}`
       });
       continue;
     }

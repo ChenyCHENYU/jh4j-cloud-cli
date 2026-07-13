@@ -12,7 +12,10 @@ import {
   writeJson
 } from "../utils/fs.js";
 import { runCommand } from "../utils/process.js";
-import { acquireTemplate, resolveTemplateSource } from "./template-source.js";
+import {
+  acquireTemplateFromSources,
+  resolveTemplateSources
+} from "./template-source.js";
 import { loadTemplateManifest } from "./template-manifest.js";
 import { DEFAULT_USER_CONFIG } from "./user-config.js";
 import type {
@@ -309,12 +312,12 @@ export async function generateProject(
   }
 
   const ref = options.ref ?? userConfig.templateRef ?? catalogTemplate.defaultRef;
-  const sourceValue = resolveTemplateSource(
+  const sourceValues = resolveTemplateSources(
     catalogTemplate,
     options.source,
     userConfig.templateSource
   );
-  const acquired = await acquireTemplate(sourceValue, ref, {
+  const acquired = await acquireTemplateFromSources(sourceValues, ref, {
     noCache: options.cache === false,
     cacheTtlMinutes: userConfig.cacheTtlMinutes
   });

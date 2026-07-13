@@ -51,7 +51,7 @@ describe("project generator", () => {
       id: "web.jh4j-mf-remote",
       version: "1.1.0"
     });
-    expect(metadata.createdBy).toBe("@jhlc/jh4j-cloud-cli@0.3.0");
+    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.3.0");
     expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(existsSync(path.join(target, "src", "views", "orders"))).toBe(true);
     expect(existsSync(path.join(target, "src", "views", "template"))).toBe(false);

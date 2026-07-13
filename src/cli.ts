@@ -1,7 +1,10 @@
 import { Command } from "commander";
 import { COMMAND_NAME, CLI_VERSION } from "./constants.js";
 import { findTemplate, loadCatalog } from "./catalog.js";
-import { resolveTemplateSource } from "./core/template-source.js";
+import {
+  acquireTemplateFromSources,
+  resolveTemplateSources
+} from "./core/template-source.js";
 import { loadUserConfig } from "./core/user-config.js";
 import { createCommand } from "./commands/create.js";
 import { doctorCommand } from "./commands/doctor.js";
@@ -73,9 +76,16 @@ export function createProgram(): Command {
       if (templatePath) return validateTemplateCommand(templatePath);
       const config = await loadUserConfig();
       const selected = findTemplate(await loadCatalog(config));
-      return validateTemplateCommand(
-        resolveTemplateSource(selected, undefined, config.templateSource)
+      const acquired = await acquireTemplateFromSources(
+        resolveTemplateSources(selected, undefined, config.templateSource),
+        config.templateRef ?? selected.defaultRef,
+        { cacheTtlMinutes: config.cacheTtlMinutes }
       );
+      try {
+        return await validateTemplateCommand(acquired.root);
+      } finally {
+        await acquired.cleanup();
+      }
     });
 
   const config = program.command("config").description("管理用户默认配置");

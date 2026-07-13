@@ -50,6 +50,7 @@ export interface CatalogTemplate {
   category: TemplateCategory;
   sourceEnvironment?: string;
   defaultSource: string;
+  sources?: string[];
   defaultRef: string;
   status: "stable" | "beta";
   tags?: string[];

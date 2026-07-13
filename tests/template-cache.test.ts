@@ -7,7 +7,10 @@ import { c as createTar } from "tar";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { copyTemplateTree } from "../src/utils/fs.js";
 import { runCommand } from "../src/utils/process.js";
-import { acquireTemplate } from "../src/core/template-source.js";
+import {
+  acquireTemplate,
+  acquireTemplateFromSources
+} from "../src/core/template-source.js";
 import { listTemplateCache } from "../src/core/template-cache.js";
 
 let temporaryRoot: string | undefined;
@@ -35,10 +38,14 @@ describe("template cache", () => {
     });
 
     const source = pathToFileURL(repository).href;
-    const first = await acquireTemplate(source, "main", {
+    const first = await acquireTemplateFromSources(
+      [path.join(temporaryRoot, "missing-template"), source],
+      "main",
+      {
       noCache: true,
       cacheTtlMinutes: 60
-    });
+      }
+    );
     expect(first.source).toBe(`${source}#main`);
     const second = await acquireTemplate(source, "main", { cacheTtlMinutes: 60 });
     expect(second.source).toContain("(cache)");

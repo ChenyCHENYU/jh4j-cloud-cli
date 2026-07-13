@@ -8,8 +8,10 @@ import type { CatalogFile, CatalogTemplate, UserConfig } from "./types.js";
 const siblingTemplatePath = fileURLToPath(
   new URL("../../jh4j-ui-template/", import.meta.url)
 );
-const remoteTemplateSource =
-  "git@github.com:ChenyCHENYU/jh4j-ui-template.git";
+const remoteTemplateSources = [
+  "https://github.com/ChenyCHENYU/jh4j-ui-template.git",
+  "https://gitee.com/ycyplus163/jh4j-ui-template.git"
+];
 
 export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
   {
@@ -20,7 +22,8 @@ export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
     sourceEnvironment: TEMPLATE_SOURCE_ENV,
     defaultSource: existsSync(siblingTemplatePath)
       ? siblingTemplatePath
-      : remoteTemplateSource,
+      : remoteTemplateSources[0],
+    sources: remoteTemplateSources,
     defaultRef: "main",
     status: "beta",
     tags: ["vue", "vite", "module-federation", "pc"]
@@ -43,6 +46,17 @@ function validateCatalogTemplate(template: CatalogTemplate): void {
   if (!template.defaultSource && !template.sourceEnvironment) {
     throw new Error(`Catalog 模板 ${template.id} 没有可解析的模板源`);
   }
+  if (template.sources?.some((source) => !source.trim())) {
+    throw new Error(`Catalog 模板 ${template.id} 包含空的备用源`);
+  }
+}
+
+function resolveCatalogSource(source: string, catalogDirectory: string): string {
+  const isRemote =
+    /^(?:https?|ssh|file):\/\//.test(source) || source.startsWith("git@");
+  return isRemote || path.isAbsolute(source)
+    ? source
+    : path.resolve(catalogDirectory, source);
 }
 
 export async function loadCatalog(config?: UserConfig): Promise<CatalogTemplate[]> {
@@ -59,14 +73,15 @@ export async function loadCatalog(config?: UserConfig): Promise<CatalogTemplate[
   }
   const catalogDirectory = path.dirname(catalogPath);
   external.templates = external.templates.map((template) => {
-    const source = template.defaultSource;
-    const isRemote = /^(?:https?|ssh|file):\/\//.test(source) || source.startsWith("git@");
     return {
       ...template,
-      defaultSource:
-        isRemote || path.isAbsolute(source)
-          ? source
-          : path.resolve(catalogDirectory, source)
+      defaultSource: resolveCatalogSource(
+        template.defaultSource,
+        catalogDirectory
+      ),
+      sources: template.sources?.map((source) =>
+        resolveCatalogSource(source, catalogDirectory)
+      )
     };
   });
   external.templates.forEach(validateCatalogTemplate);

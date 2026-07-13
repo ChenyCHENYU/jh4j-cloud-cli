@@ -7,7 +7,8 @@
 - 增加通用模板能力协议及 `--features`、`--no-standards` 参数。
 - PC 模板接入完整 `@robot-admin/git-standards` 可选能力。
 - 调整 Git 初始化顺序，确保依赖安装时 Husky 能正确激活。
-- 发布版默认从独立 GitHub 模板仓库拉取模板。
+- 发布版默认使用 GitHub/Gitee HTTPS 主备源拉取模板。
+- npm 包迁移到 `@agile-team/jh4j-cloud-cli` 并配置为公开发布。
 
 ## 0.2.0
 

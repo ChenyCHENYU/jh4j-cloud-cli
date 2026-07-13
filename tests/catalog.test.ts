@@ -26,6 +26,7 @@ describe("external catalog", () => {
           description: "override",
           category: "frontend",
           defaultSource: "./pc-template",
+          sources: ["./pc-template-backup", "https://git.example/pc.git"],
           defaultRef: "v1.0.0",
           status: "stable"
         },
@@ -51,6 +52,10 @@ describe("external catalog", () => {
     expect(pcTemplate.defaultSource).toBe(
       path.join(temporaryRoot, "pc-template")
     );
+    expect(pcTemplate.sources).toEqual([
+      path.join(temporaryRoot, "pc-template-backup"),
+      "https://git.example/pc.git"
+    ]);
     expect(findTemplate(catalog, "service.jh4j-spring-cloud").category).toBe(
       "backend"
     );

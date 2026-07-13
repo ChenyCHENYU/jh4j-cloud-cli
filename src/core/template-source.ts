@@ -24,14 +24,22 @@ export function resolveTemplateSource(
   override?: string,
   configuredSource?: string
 ): string {
-  return (
+  return resolveTemplateSources(template, override, configuredSource)[0];
+}
+
+export function resolveTemplateSources(
+  template: CatalogTemplate,
+  override?: string,
+  configuredSource?: string
+): string[] {
+  const exclusiveSource =
     override ||
     (template.sourceEnvironment
       ? process.env[template.sourceEnvironment]
       : undefined) ||
-    configuredSource ||
-    template.defaultSource
-  );
+    configuredSource;
+  if (exclusiveSource) return [exclusiveSource];
+  return [...new Set([template.defaultSource, ...(template.sources ?? [])])];
 }
 
 function isGitSource(source: string): boolean {
@@ -173,8 +181,20 @@ export async function acquireTemplate(
   try {
     await runCommand(
       "git",
-      ["clone", "--depth", "1", "--branch", ref, source, cacheStaging.templateRoot],
-      { stdio: "pipe" }
+      [
+        "-c",
+        "http.lowSpeedLimit=1024",
+        "-c",
+        "http.lowSpeedTime=15",
+        "clone",
+        "--depth",
+        "1",
+        "--branch",
+        ref,
+        source,
+        cacheStaging.templateRoot
+      ],
+      { stdio: "pipe", env: { GIT_TERMINAL_PROMPT: "0" } }
     );
     await cacheStaging.commit();
     return {
@@ -186,4 +206,21 @@ export async function acquireTemplate(
     await cacheStaging.cleanup();
     throw error;
   }
+}
+
+export async function acquireTemplateFromSources(
+  sources: string[],
+  ref: string,
+  options: { noCache?: boolean; cacheTtlMinutes?: number } = {}
+): Promise<AcquiredTemplate> {
+  if (!sources.length) throw new Error("没有可用的模板源");
+  const failures: string[] = [];
+  for (const source of [...new Set(sources)]) {
+    try {
+      return await acquireTemplate(source, ref, options);
+    } catch (error) {
+      failures.push(`${source}: ${(error as Error).message}`);
+    }
+  }
+  throw new Error(`所有模板源均不可用：\n- ${failures.join("\n- ")}`);
 }

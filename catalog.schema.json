@@ -25,6 +25,11 @@
           "description": { "type": "string" },
           "category": { "enum": ["frontend", "backend", "mobile"] },
           "defaultSource": { "type": "string", "minLength": 1 },
+          "sources": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
           "sourceEnvironment": { "type": "string" },
           "defaultRef": { "type": "string", "minLength": 1 },
           "status": { "enum": ["stable", "beta"] },

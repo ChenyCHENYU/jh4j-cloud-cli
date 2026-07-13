@@ -19,10 +19,10 @@ node bin/jh4j.js doctor
 发布到内部 npm 后：
 
 ```bash
-npx @jhlc/jh4j-cloud-cli create my-app
+npx @agile-team/jh4j-cloud-cli create my-app
 
 # 或全局安装
-pnpm add -g @jhlc/jh4j-cloud-cli
+pnpm add -g @agile-team/jh4j-cloud-cli
 jh4j create my-app
 ```
 
@@ -96,7 +96,7 @@ PC 模板默认启用完整的 `@robot-admin/git-standards`。也可以通过 `-
 --source
 → 模板专属环境变量
 → 用户配置 templateSource
-→ Catalog defaultSource
+→ Catalog defaultSource + sources（按顺序自动降级）
 ```
 
 ```bash
@@ -105,7 +105,14 @@ jh4j create my-app --source https://git.example/jh4j-ui-template.git --ref v1.0.
 jh4j create my-app --source ./jh4j-ui-template-1.0.0.tgz
 ```
 
-内置 PC 模板在 CLI 开发期优先读取兄弟目录 `../jh4j-ui-template`；发布安装后默认拉取 `git@github.com:ChenyCHENYU/jh4j-ui-template.git`。也可设置：
+内置 PC 模板在 CLI 开发期优先读取兄弟目录 `../jh4j-ui-template`；发布安装后依次尝试以下 HTTPS 源，主源不可用时自动降级：
+
+```text
+https://github.com/ChenyCHENYU/jh4j-ui-template.git
+→ https://gitee.com/ycyplus163/jh4j-ui-template.git
+```
+
+也可设置单一强制源：
 
 ```powershell
 $env:JH4J_UI_TEMPLATE_SOURCE="https://git.example/jh4j-ui-template.git"
@@ -163,6 +170,9 @@ jh4j config reset
       "description": "企业 PC 业务子系统",
       "category": "frontend",
       "defaultSource": "https://git.example/jh4j-ui-template.git",
+      "sources": [
+        "https://git-backup.example/jh4j-ui-template.git"
+      ],
       "sourceEnvironment": "JH4J_UI_TEMPLATE_SOURCE",
       "defaultRef": "main",
       "status": "stable",

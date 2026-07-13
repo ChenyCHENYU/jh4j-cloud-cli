@@ -1,10 +1,10 @@
 {
-  "name": "@jhlc/jh4j-cloud-cli",
+  "name": "@agile-team/jh4j-cloud-cli",
   "version": "0.3.0",
   "description": "JH4J Cloud 企业内部标准化项目脚手架",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/ChenyCHENYU/jh4j-cloud-cli.git"
+    "url": "git+https://github.com/ChenyCHENYU/jh4j-cloud-cli.git"
   },
   "homepage": "https://github.com/ChenyCHENYU/jh4j-cloud-cli#readme",
   "bugs": {
@@ -43,7 +43,8 @@
     "tar": "^7.5.19"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
