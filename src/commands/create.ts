@@ -39,6 +39,28 @@ export function categoryOptionsFor(
   ).map(({ value, label }) => ({ value, label }));
 }
 
+export function defaultProjectNameFor(category: TemplateCategory): string {
+  if (category === "mobile") return "jh4j-mobile-app";
+  if (category === "backend") return "jh4j-service-app";
+  return "jh4j-ui-app";
+}
+
+export function projectNamePromptOptions(
+  category: TemplateCategory
+): Parameters<typeof prompts.text>[0] {
+  const defaultProjectName = defaultProjectNameFor(category);
+  return {
+    message: "项目名称",
+    initialValue: defaultProjectName,
+    defaultValue: defaultProjectName,
+    validate(value) {
+      return !value || normalizeProjectName(value)
+        ? undefined
+        : "请输入至少一个字母或数字，例如 jh4j-mobile-app";
+    }
+  };
+}
+
 async function selectCategory(
   templates: CatalogTemplate[],
   requestedCategory: string | undefined,
@@ -123,26 +145,17 @@ export async function createCommand(
   const catalog = await loadCatalog(userConfig);
   const template = await selectTemplate(catalog, options);
 
-  let projectName = requestedName;
-  if (!projectName) {
-    if (options.yes) throw new Error("非交互模式必须指定项目名称");
-    const defaultProjectName =
-      template.category === "mobile" ? "jh4j-mobile-app" : "jh4j-ui-app";
-    const answer = await prompts.text({
-      message: "项目名称",
-      placeholder: defaultProjectName,
-      defaultValue: defaultProjectName,
-      validate(value) {
-        return !value || normalizeProjectName(value)
-          ? undefined
-          : "请输入至少一个字母或数字，例如 jh4j-mobile-app";
-      }
-    });
+  const defaultProjectName = defaultProjectNameFor(template.category);
+  let rawProjectName = requestedName;
+  if (!rawProjectName && !options.yes) {
+    const answer = await prompts.text(
+      projectNamePromptOptions(template.category)
+    );
     if (prompts.isCancel(answer)) throw new Error("用户取消创建");
-    projectName = String(answer).trim() || defaultProjectName;
+    rawProjectName = String(answer).trim() || defaultProjectName;
   }
-
-  const rawProjectName = projectName;
+  rawProjectName ??= defaultProjectName;
+  let projectName = rawProjectName;
   projectName = normalizeProjectName(rawProjectName);
   if (!projectName) {
     throw new Error("项目名称至少需要包含一个字母或数字");
@@ -150,6 +163,7 @@ export async function createCommand(
   if (projectName !== rawProjectName) {
     prompts.log.info(`项目名称已规范化：${projectName}`);
   }
+  prompts.log.info("其余配置使用模板默认值，生成后可在项目内修改");
 
   const result = await generateProject(
     template,
@@ -163,25 +177,16 @@ export async function createCommand(
     return;
   }
 
-  prompts.note(
+  prompts.log.success(
+    `已创建 ${projectName}（${result.templateId}@${result.templateVersion}）`
+  );
+  prompts.outro(
     [
-      `目录: ${result.targetRoot}`,
-      `模板: ${result.templateId}@${result.templateVersion}`,
-      `来源: ${result.source}`,
-      `默认能力: ${result.features.length ? result.features.join(", ") : "无"}`,
-      `依赖: ${result.installed ? "已安装" : "未安装（默认由开发者手动安装）"}`,
-      `Git: ${result.gitInitialized ? "main 已初始化" : "未初始化"}`,
-      "",
-      "需要调整配置时，直接修改生成项目中的：",
-      "  project.config.json  项目、联调与环境参数",
-      "  .npmrc               Registry 配置",
-      "  .env*                各端运行环境配置（如存在）",
-      "",
       `cd ${projectName}`,
       ...(!result.installed ? ["pnpm install"] : []),
-      "pnpm dev"
-    ].join("\n"),
-    "创建成功"
+      "pnpm dev",
+      "",
+      "配置：project.config.json / .npmrc / .env*"
+    ].join("\n")
   );
-  prompts.outro("项目已准备好");
 }

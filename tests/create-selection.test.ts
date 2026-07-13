@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   categoryOptionsFor,
+  defaultProjectNameFor,
+  projectNamePromptOptions,
   templatesByCategory
 } from "../src/commands/create.js";
 import type { CatalogTemplate } from "../src/types.js";
@@ -58,5 +60,18 @@ describe("template category selection", () => {
       { value: "frontend", label: "PC 前端 · Vue 3 / 微前端" },
       { value: "mobile", label: "移动端 H5 · Vue 3 / Vant" }
     ]);
+  });
+
+  it("provides stable default project names for each category", () => {
+    expect(defaultProjectNameFor("frontend")).toBe("jh4j-ui-app");
+    expect(defaultProjectNameFor("mobile")).toBe("jh4j-mobile-app");
+    expect(defaultProjectNameFor("backend")).toBe("jh4j-service-app");
+  });
+
+  it("prefills an editable project name and accepts it on Enter", () => {
+    const options = projectNamePromptOptions("mobile");
+
+    expect(options.initialValue).toBe("jh4j-mobile-app");
+    expect(options.defaultValue).toBe("jh4j-mobile-app");
   });
 });

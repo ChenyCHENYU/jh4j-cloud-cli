@@ -31,10 +31,6 @@ type PartialProjectInput = Partial<Omit<ProjectInput, "environments">> & {
   environments?: Partial<ProjectInput["environments"]>;
 };
 
-function cancelled(value: unknown): value is symbol {
-  return prompts.isCancel(value);
-}
-
 export function normalizeProjectName(value: string): string {
   return value
     .trim()
@@ -86,21 +82,6 @@ function ensureHttpUrl(value: string, label: string): string {
   } catch {
     throw new Error(`${label} 必须是 http/https URL`);
   }
-}
-
-async function askText(
-  message: string,
-  initialValue: string,
-  validate?: (value: string | undefined) => string | undefined
-): Promise<string> {
-  const answer = await prompts.text({
-    message,
-    placeholder: initialValue,
-    defaultValue: initialValue,
-    validate
-  });
-  if (cancelled(answer)) throw new Error("用户取消创建");
-  return String(answer).trim() || initialValue;
 }
 
 async function loadCreateConfig(
@@ -158,7 +139,6 @@ async function collectTemplateFeatures(
 
 async function collectProjectInput(
   projectName: string,
-  manifest: TemplateManifest,
   sourceConfig: ProjectInput,
   fileConfig: PartialProjectInput,
   options: CreateOptions,
@@ -188,34 +168,6 @@ async function collectProjectInput(
     if (value && environments[env]) {
       environments[env] = { ...environments[env], ...value };
     }
-  }
-
-  if (!options.yes) {
-    title = await askText(
-      manifest.category === "mobile" ? "应用标题" : "系统标题",
-      title,
-      (value) => (value?.trim() ? undefined : "标题不能为空")
-    );
-    port = await askText("开发端口", String(port), (value) => {
-      const parsed = Number(value);
-      return Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535
-        ? undefined
-        : "请输入 1024 到 65535 之间的端口";
-    });
-    localBackendUrl = await askText(
-      manifest.category === "mobile" ? "本地 API 地址" : "本地后端地址",
-      localBackendUrl,
-      (value) => {
-        try {
-          const url = new URL(value ?? "");
-          return url.protocol === "http:" || url.protocol === "https:"
-            ? undefined
-            : "请输入 http/https 地址";
-        } catch {
-          return "请输入完整的 http/https 地址";
-        }
-      }
-    );
   }
 
   if (!title.trim()) throw new Error("系统标题不能为空");
@@ -357,7 +309,6 @@ export async function generateProject(
     const features = await collectTemplateFeatures(manifest, fileConfig, options);
     const input = await collectProjectInput(
       projectName,
-      manifest,
       {
         ...sourceProjectConfig,
         npmRegistry: manifest.defaults.npmRegistry,
