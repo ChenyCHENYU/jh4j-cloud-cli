@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findTemplate, loadCatalog } from "../src/catalog.js";
-import { generateProject } from "../src/core/project-generator.js";
+import {
+  generateProject,
+  normalizeProjectName
+} from "../src/core/project-generator.js";
 
 const temporaryRoots: string[] = [];
 
@@ -17,6 +20,12 @@ afterEach(async () => {
 });
 
 describe("project generator", () => {
+  it("normalizes human-friendly project names", () => {
+    expect(normalizeProjectName("JH4J 移动端 H5 模板")).toBe("jh4j-h5");
+    expect(normalizeProjectName("  My Mobile_App  ")).toBe("my-mobile_app");
+    expect(normalizeProjectName("移动端模板")).toBe("");
+  });
+
   it("creates a configured project without copying template artifacts", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "jh4j-cli-test-"));
     temporaryRoots.push(cwd);

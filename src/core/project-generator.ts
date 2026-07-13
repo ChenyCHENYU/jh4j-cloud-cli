@@ -35,10 +35,21 @@ function cancelled(value: unknown): value is symbol {
   return prompts.isCancel(value);
 }
 
+export function normalizeProjectName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/^[._-]+/, "")
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/[-._]+$/, "");
+}
+
 function ensureProjectName(value: string): string {
-  const name = value.trim();
+  const name = normalizeProjectName(value);
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
-    throw new Error("项目名称只能包含小写字母、数字、点、下划线和连字符");
+    throw new Error("项目名称至少需要包含一个字母或数字");
   }
   return name;
 }
@@ -77,8 +88,17 @@ function ensureHttpUrl(value: string, label: string): string {
   }
 }
 
-async function askText(message: string, initialValue: string): Promise<string> {
-  const answer = await prompts.text({ message, initialValue });
+async function askText(
+  message: string,
+  initialValue: string,
+  validate?: (value: string | undefined) => string | undefined
+): Promise<string> {
+  const answer = await prompts.text({
+    message,
+    placeholder: initialValue,
+    defaultValue: initialValue,
+    validate
+  });
   if (cancelled(answer)) throw new Error("用户取消创建");
   return String(answer).trim() || initialValue;
 }
@@ -173,12 +193,28 @@ async function collectProjectInput(
   if (!options.yes) {
     title = await askText(
       manifest.category === "mobile" ? "应用标题" : "系统标题",
-      title
+      title,
+      (value) => (value?.trim() ? undefined : "标题不能为空")
     );
-    port = await askText("开发端口", String(port));
+    port = await askText("开发端口", String(port), (value) => {
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535
+        ? undefined
+        : "请输入 1024 到 65535 之间的端口";
+    });
     localBackendUrl = await askText(
       manifest.category === "mobile" ? "本地 API 地址" : "本地后端地址",
-      localBackendUrl
+      localBackendUrl,
+      (value) => {
+        try {
+          const url = new URL(value ?? "");
+          return url.protocol === "http:" || url.protocol === "https:"
+            ? undefined
+            : "请输入 http/https 地址";
+        } catch {
+          return "请输入完整的 http/https 地址";
+        }
+      }
     );
   }
 
@@ -280,10 +316,21 @@ export async function generateProject(
     options.source,
     userConfig.templateSource
   );
-  const acquired = await acquireTemplateFromSources(sourceValues, ref, {
-    noCache: options.cache === false,
-    cacheTtlMinutes: userConfig.cacheTtlMinutes
-  });
+  const acquisitionSpinner = options.yes
+    ? undefined
+    : prompts.spinner({ indicator: "timer" });
+  acquisitionSpinner?.start("正在获取并校验模板");
+  let acquired: Awaited<ReturnType<typeof acquireTemplateFromSources>>;
+  try {
+    acquired = await acquireTemplateFromSources(sourceValues, ref, {
+      noCache: options.cache === false,
+      cacheTtlMinutes: userConfig.cacheTtlMinutes
+    });
+    acquisitionSpinner?.stop("模板准备完成");
+  } catch (error) {
+    acquisitionSpinner?.error("模板获取失败");
+    throw error;
+  }
   const stagingRoot = path.join(
     resolvedCwd,
     `.${projectName}.jh4j-tmp-${process.pid}-${Date.now()}`

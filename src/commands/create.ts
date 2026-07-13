@@ -1,6 +1,9 @@
 import * as prompts from "@clack/prompts";
 import { findTemplate, loadCatalog } from "../catalog.js";
-import { generateProject } from "../core/project-generator.js";
+import {
+  generateProject,
+  normalizeProjectName
+} from "../core/project-generator.js";
 import { loadUserConfig } from "../core/user-config.js";
 import type {
   CatalogTemplate,
@@ -11,11 +14,10 @@ import type {
 const CATEGORY_OPTIONS: Array<{
   value: TemplateCategory;
   label: string;
-  hint: string;
 }> = [
-  { value: "frontend", label: "前端", hint: "PC、Web 与微前端应用" },
-  { value: "backend", label: "后端", hint: "Java 服务与云原生应用" },
-  { value: "mobile", label: "移动端", hint: "App、H5 与跨端应用" }
+  { value: "frontend", label: "PC 前端 · Vue 3 / 微前端" },
+  { value: "backend", label: "后端服务 · Java / 云原生" },
+  { value: "mobile", label: "移动端 H5 · Vue 3 / Vant" }
 ];
 
 function isCategory(value: string): value is TemplateCategory {
@@ -27,6 +29,14 @@ export function templatesByCategory(
   category: TemplateCategory
 ): CatalogTemplate[] {
   return templates.filter((template) => template.category === category);
+}
+
+export function categoryOptionsFor(
+  templates: CatalogTemplate[]
+): Array<{ value: TemplateCategory; label: string }> {
+  return CATEGORY_OPTIONS.filter(
+    (item) => templatesByCategory(templates, item.value).length > 0
+  ).map(({ value, label }) => ({ value, label }));
 }
 
 async function selectCategory(
@@ -52,17 +62,15 @@ async function selectCategory(
   if (!firstAvailable) throw new Error("Catalog 中没有可用模板");
   if (nonInteractive) return firstAvailable.value;
 
+  const availableOptions = categoryOptionsFor(templates);
+  if (availableOptions.length === 1) return availableOptions[0].value;
+
   const selected = await prompts.select({
     message: "选择项目类型",
-    options: CATEGORY_OPTIONS.map((item) => {
-      const count = templatesByCategory(templates, item.value).length;
-      return {
-        value: item.value,
-        label: item.label,
-        hint: count ? `${item.hint} · ${count} 个模板` : `${item.hint} · 暂未提供`,
-        disabled: count === 0
-      };
-    })
+    options: availableOptions.map((item) => ({
+      value: item.value,
+      label: item.label
+    }))
   });
   if (prompts.isCancel(selected)) throw new Error("用户取消创建");
   return selected as TemplateCategory;
@@ -88,14 +96,18 @@ async function selectTemplate(
     Boolean(options.yes)
   );
   const candidates = templatesByCategory(templates, category);
-  if (options.yes || candidates.length === 1) return findTemplate(candidates);
+  if (options.yes) return findTemplate(candidates);
+  if (candidates.length === 1) {
+    const selected = candidates[0];
+    prompts.log.info(`使用模板：${selected.name}`);
+    return selected;
+  }
 
   const selected = await prompts.select({
     message: "选择项目模板",
     options: candidates.map((template) => ({
       value: template.id,
-      label: template.name,
-      hint: `${template.status} · ${template.description}`
+      label: `${template.name} · ${template.description}`
     }))
   });
   if (prompts.isCancel(selected)) throw new Error("用户取消创建");
@@ -118,10 +130,25 @@ export async function createCommand(
       template.category === "mobile" ? "jh4j-mobile-app" : "jh4j-ui-app";
     const answer = await prompts.text({
       message: "项目名称",
-      initialValue: defaultProjectName
+      placeholder: defaultProjectName,
+      defaultValue: defaultProjectName,
+      validate(value) {
+        return !value || normalizeProjectName(value)
+          ? undefined
+          : "请输入至少一个字母或数字，例如 jh4j-mobile-app";
+      }
     });
     if (prompts.isCancel(answer)) throw new Error("用户取消创建");
     projectName = String(answer).trim() || defaultProjectName;
+  }
+
+  const rawProjectName = projectName;
+  projectName = normalizeProjectName(rawProjectName);
+  if (!projectName) {
+    throw new Error("项目名称至少需要包含一个字母或数字");
+  }
+  if (projectName !== rawProjectName) {
+    prompts.log.info(`项目名称已规范化：${projectName}`);
   }
 
   const result = await generateProject(

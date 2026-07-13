@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { templatesByCategory } from "../src/commands/create.js";
+import {
+  categoryOptionsFor,
+  templatesByCategory
+} from "../src/commands/create.js";
 import type { CatalogTemplate } from "../src/types.js";
 
 const templates: CatalogTemplate[] = [
@@ -42,6 +45,18 @@ describe("template category selection", () => {
     ]);
     expect(templatesByCategory(templates, "mobile").map((item) => item.id)).toEqual([
       "mobile.robot-h5"
+    ]);
+  });
+
+  it("shows only available categories with unambiguous labels", () => {
+    expect(categoryOptionsFor(templates)).toEqual([
+      { value: "frontend", label: "PC 前端 · Vue 3 / 微前端" },
+      { value: "backend", label: "后端服务 · Java / 云原生" },
+      { value: "mobile", label: "移动端 H5 · Vue 3 / Vant" }
+    ]);
+    expect(categoryOptionsFor(templates.filter((item) => item.category !== "backend"))).toEqual([
+      { value: "frontend", label: "PC 前端 · Vue 3 / 微前端" },
+      { value: "mobile", label: "移动端 H5 · Vue 3 / Vant" }
     ]);
   });
 });
