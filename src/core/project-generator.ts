@@ -128,28 +128,6 @@ async function collectTemplateFeatures(
     });
   }
 
-  if (!options.yes) {
-    const selectable = available.filter(
-      (feature) =>
-        options.standards !== false ||
-        feature.package !== "@robot-admin/git-standards"
-    );
-    if (selectable.length) {
-      const answer = await prompts.multiselect({
-        message: "选择项目标准化能力",
-        options: selectable.map((feature) => ({
-          value: feature.id,
-          label: feature.name,
-          hint: `${feature.description}${feature.package ? ` · ${feature.package}` : ""}`
-        })),
-        initialValues: selected,
-        required: false
-      });
-      if (cancelled(answer)) throw new Error("用户取消创建");
-      selected = answer.map(String);
-    }
-  }
-
   for (const feature of available) {
     if (feature.required && !selected.includes(feature.id)) {
       selected.push(feature.id);
@@ -193,43 +171,15 @@ async function collectProjectInput(
   }
 
   if (!options.yes) {
-    if (manifest.category !== "mobile") {
-      moduleName = await askText("模块标识", moduleName);
-    }
     title = await askText(
       manifest.category === "mobile" ? "应用标题" : "系统标题",
       title
     );
     port = await askText("开发端口", String(port));
-    npmRegistry = await askText("npm registry", npmRegistry);
-    jhlcRegistry = await askText("@jhlc 私有 registry", jhlcRegistry);
     localBackendUrl = await askText(
       manifest.category === "mobile" ? "本地 API 地址" : "本地后端地址",
       localBackendUrl
     );
-    if (manifest.category !== "mobile") {
-      localPublicUrl = await askText("本地 public 地址", localPublicUrl);
-    }
-
-    if (manifest.category !== "mobile") {
-      const configureEnvironments = await prompts.confirm({
-        message: "是否逐项确认五套环境地址",
-        initialValue: false
-      });
-      if (cancelled(configureEnvironments)) throw new Error("用户取消创建");
-      if (configureEnvironments) {
-        for (const env of ENV_NAMES) {
-          environments[env].webUrl = await askText(
-            `${env.toUpperCase()} 平台地址`,
-            environments[env].webUrl
-          );
-          environments[env].apiPrefix = await askText(
-            `${env.toUpperCase()} API 前缀`,
-            environments[env].apiPrefix
-          );
-        }
-      }
-    }
   }
 
   if (!title.trim()) throw new Error("系统标题不能为空");
@@ -372,7 +322,8 @@ export async function generateProject(
       features
     );
 
-    const shouldInstall = !options.skipInstall && userConfig.autoInstall;
+    const shouldInstall =
+      !options.skipInstall && (options.install === true || userConfig.autoInstall);
     const shouldInitializeGit = !options.skipGit && userConfig.autoGit;
 
     if (options.dryRun) {

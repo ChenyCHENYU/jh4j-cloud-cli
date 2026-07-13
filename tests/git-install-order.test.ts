@@ -100,7 +100,7 @@ describe("Git and dependency installation order", () => {
     const result = await generateProject(
       template,
       "generated-app",
-      { yes: true },
+      { yes: true, install: true },
       outputRoot,
       DEFAULT_USER_CONFIG
     );
@@ -110,5 +110,19 @@ describe("Git and dependency installation order", () => {
     expect(
       existsSync(path.join(outputRoot, "generated-app", "git-before-install.txt"))
     ).toBe(true);
+
+    const manualOutputRoot = path.join(temporaryRoot, "manual-output");
+    await mkdir(manualOutputRoot);
+    const manualResult = await generateProject(
+      template,
+      "manual-app",
+      { yes: true, skipGit: true },
+      manualOutputRoot,
+      DEFAULT_USER_CONFIG
+    );
+    expect(manualResult.installed).toBe(false);
+    expect(existsSync(path.join(manualOutputRoot, "manual-app", "node_modules"))).toBe(
+      false
+    );
   }, 30_000);
 });

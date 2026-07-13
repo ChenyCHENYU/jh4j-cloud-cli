@@ -88,7 +88,7 @@ async function selectTemplate(
     Boolean(options.yes)
   );
   const candidates = templatesByCategory(templates, category);
-  if (options.yes) return findTemplate(candidates);
+  if (options.yes || candidates.length === 1) return findTemplate(candidates);
 
   const selected = await prompts.select({
     message: "选择项目模板",
@@ -109,19 +109,21 @@ export async function createCommand(
   prompts.intro("JH4J Cloud 项目创建");
   const userConfig = await loadUserConfig();
   const catalog = await loadCatalog(userConfig);
+  const template = await selectTemplate(catalog, options);
 
   let projectName = requestedName;
   if (!projectName) {
     if (options.yes) throw new Error("非交互模式必须指定项目名称");
+    const defaultProjectName =
+      template.category === "mobile" ? "jh4j-mobile-app" : "jh4j-ui-app";
     const answer = await prompts.text({
       message: "项目名称",
-      placeholder: "jh4j-ui-app"
+      initialValue: defaultProjectName
     });
     if (prompts.isCancel(answer)) throw new Error("用户取消创建");
-    projectName = String(answer);
+    projectName = String(answer).trim() || defaultProjectName;
   }
 
-  const template = await selectTemplate(catalog, options);
   const result = await generateProject(
     template,
     projectName,
@@ -139,9 +141,14 @@ export async function createCommand(
       `目录: ${result.targetRoot}`,
       `模板: ${result.templateId}@${result.templateVersion}`,
       `来源: ${result.source}`,
-      `能力: ${result.features.length ? result.features.join(", ") : "无可选能力"}`,
-      `依赖: ${result.installed ? "已安装" : "未安装"}`,
+      `默认能力: ${result.features.length ? result.features.join(", ") : "无"}`,
+      `依赖: ${result.installed ? "已安装" : "未安装（默认由开发者手动安装）"}`,
       `Git: ${result.gitInitialized ? "main 已初始化" : "未初始化"}`,
+      "",
+      "需要调整配置时，直接修改生成项目中的：",
+      "  project.config.json  项目、联调与环境参数",
+      "  .npmrc               Registry 配置",
+      "  .env*                各端运行环境配置（如存在）",
       "",
       `cd ${projectName}`,
       ...(!result.installed ? ["pnpm install"] : []),
@@ -149,5 +156,5 @@ export async function createCommand(
     ].join("\n"),
     "创建成功"
   );
-  prompts.outro("Happy coding!");
+  prompts.outro("项目已准备好");
 }

@@ -103,6 +103,7 @@ export interface CreateOptions {
   config?: string;
   yes?: boolean;
   dryRun?: boolean;
+  install?: boolean;
   skipInstall?: boolean;
   skipGit?: boolean;
   force?: boolean;

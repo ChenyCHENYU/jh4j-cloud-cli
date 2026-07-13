@@ -23,6 +23,7 @@ describe("user config", () => {
     vi.stubEnv("JH4J_HOME", temporaryRoot);
 
     expect(await loadUserConfig()).toEqual(DEFAULT_USER_CONFIG);
+    expect(DEFAULT_USER_CONFIG.autoInstall).toBe(false);
     const config = { ...(await loadUserConfig()), autoInstall: false, cacheTtlMinutes: 120 };
     await saveUserConfig(config);
     expect(await loadUserConfig()).toEqual(config);

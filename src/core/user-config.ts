@@ -7,7 +7,7 @@ import type { UserConfig } from "../types.js";
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   schemaVersion: USER_CONFIG_SCHEMA_VERSION,
-  autoInstall: true,
+  autoInstall: false,
   autoGit: true,
   cacheTtlMinutes: 60
 };
