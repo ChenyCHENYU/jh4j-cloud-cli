@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildCompletionContent,
+  buildCompletionView,
   creationModeOptions,
   defaultProjectNameFor,
   projectNamePromptOptions,
@@ -136,12 +136,24 @@ describe("template category selection", () => {
       }
     };
 
-    const content = buildCompletionContent("jh4j-mobile-app", "quick", result);
+    const view = buildCompletionView("jh4j-mobile-app", "quick", result);
 
-    expect(content).toContain("模板：JH4J 移动端 H5 模板 · v1.6.0");
-    expect(content).toContain("@robot-h5/core 移动端核心能力");
-    expect(content).toContain("Git 提交规范、代码检查与 Git Hooks");
-    expect(content).toContain("2. pnpm install");
-    expect(content).toContain("3. pnpm dev");
+    expect(view.overview).toContainEqual({
+      label: "模板",
+      value: "JH4J 移动端 H5 模板 · v1.6.0"
+    });
+    expect(view.profile).toContainEqual({
+      label: "核心",
+      value: "@robot-h5/core"
+    });
+    expect(view.profile).toContainEqual({
+      label: "规范",
+      value: "Commitizen · Commitlint · Husky · ESLint"
+    });
+    expect(view.nextSteps).toEqual([
+      "cd jh4j-mobile-app",
+      "pnpm install",
+      "pnpm dev"
+    ]);
   });
 });

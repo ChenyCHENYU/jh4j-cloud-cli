@@ -1,6 +1,6 @@
 import * as prompts from "@clack/prompts";
-import { styleText } from "node:util";
 import { findTemplate, loadCatalog } from "../catalog.js";
+import { CLI_VERSION } from "../constants.js";
 import {
   generateProject,
   normalizeProjectName,
@@ -8,6 +8,7 @@ import {
 } from "../core/project-generator.js";
 import { UserCancelledError } from "../core/errors.js";
 import { loadUserConfig } from "../core/user-config.js";
+import { ui } from "../ui/theme.js";
 import type {
   CatalogTemplate,
   CreateOptions,
@@ -79,7 +80,7 @@ export function projectNamePromptOptions(
 ): Parameters<typeof prompts.text>[0] {
   const defaultProjectName = defaultProjectNameFor(category);
   return {
-    message: "项目名称",
+    message: ui.strong("项目名称"),
     initialValue: defaultProjectName,
     defaultValue: defaultProjectName,
     validate(value) {
@@ -123,8 +124,12 @@ async function selectTemplate(
   if (candidates.length === 1) return candidates[0];
 
   const selected = await prompts.select({
-    message: "选择项目模板",
-    options: templateOptionsFor(candidates),
+    message: ui.strong("选择项目模板"),
+    options: templateOptionsFor(candidates).map((option) => ({
+      ...option,
+      label: ui.strong(option.label),
+      hint: ui.muted(option.hint)
+    })),
     initialValue: candidates[0].id
   });
   if (prompts.isCancel(selected)) throw new UserCancelledError();
@@ -134,64 +139,162 @@ async function selectTemplate(
 async function selectCreationMode(options: CreateOptions): Promise<CreationMode> {
   if (options.yes) return "quick";
   const selected = await prompts.select({
-    message: "选择创建方式",
-    options: creationModeOptions(),
+    message: ui.strong("选择创建方式"),
+    options: creationModeOptions().map((option) => ({
+      ...option,
+      label:
+        option.value === "quick"
+          ? ui.accent(ui.strong(option.label))
+          : ui.strong(option.label),
+      hint: ui.muted(option.hint)
+    })),
     initialValue: "quick"
   });
   if (prompts.isCancel(selected)) throw new UserCancelledError();
   return selected as CreationMode;
 }
 
-function presetsFor(
+function profileRowsFor(
   category: TemplateCategory,
   features: string[]
-): string[] {
-  const presets =
+): Array<{ label: string; value: string }> {
+  const rows =
     category === "mobile"
       ? [
-          "Vue 3 / Vite 7 / Vant 4 / TypeScript",
-          "@robot-h5/core 移动端核心能力"
+          { label: "技术", value: "Vue 3 · Vite 7 · Vant 4 · TypeScript" },
+          { label: "核心", value: "@robot-h5/core" }
         ]
       : category === "frontend"
         ? [
-            "Vue 3 / Vite / Module Federation",
-            "@jhlc/common-core 企业基础能力"
+            { label: "技术", value: "Vue 3 · Vite · Module Federation" },
+            { label: "核心", value: "@jhlc/common-core" }
           ]
-        : ["Java / Spring Cloud 企业服务基础能力"];
+        : [{ label: "技术", value: "Java · Spring Cloud" }];
   if (features.includes("git-standards")) {
-    presets.push("Git 提交规范、代码检查与 Git Hooks");
+    rows.push({ label: "规范", value: "Commitizen · Commitlint · Husky · ESLint" });
   }
-  presets.push("DEV / SIT / UAT / PRE / PRD 多环境配置");
-  return presets;
+  rows.push({ label: "环境", value: "DEV · SIT · UAT · PRE · PRD" });
+  return rows;
 }
 
-export function buildCompletionContent(
+export interface CompletionView {
+  headline: string;
+  overview: Array<{ label: string; value: string }>;
+  endpoints: Array<{ label: string; value: string }>;
+  profile: Array<{ label: string; value: string }>;
+  gitInitialized: boolean;
+  installed: boolean;
+  nextSteps: string[];
+  configFiles: string;
+}
+
+export function buildCompletionView(
   projectName: string,
   mode: CreationMode,
   result: GenerateProjectResult
-): string {
+): CompletionView {
   const nextSteps = [
-    `1. cd ${projectName}`,
-    ...(!result.installed ? ["2. pnpm install", "3. pnpm dev"] : ["2. pnpm dev"])
+    `cd ${projectName}`,
+    ...(!result.installed ? ["pnpm install", "pnpm dev"] : ["pnpm dev"])
   ];
-  return [
-    `项目：${projectName}`,
-    `模板：${result.templateName} · v${result.templateVersion}`,
-    `方式：${mode === "quick" ? "快速创建" : "自定义创建"}`,
-    `标题：${result.configuration.title}`,
-    `开发：http://localhost:${result.configuration.devServerPort}`,
-    `联调：${result.configuration.localBackendUrl}`,
-    "",
-    "已预设",
-    ...presetsFor(result.category, result.features).map((item) => `  ✓ ${item}`),
-    `  ${result.gitInitialized ? "✓ Git main 仓库已初始化" : "○ 未初始化 Git 仓库"}`,
-    `  ${result.installed ? "✓ 项目依赖已安装" : "○ 项目依赖未安装（按需手动安装）"}`,
-    "",
-    "下一步",
-    ...nextSteps.map((step) => `  ${step}`),
-    "",
-    "配置：project.config.json / .env*"
-  ].join("\n");
+  return {
+    headline: `${projectName} 创建成功`,
+    overview: [
+      {
+        label: "模板",
+        value: `${result.templateName} · v${result.templateVersion}`
+      },
+      { label: "标题", value: result.configuration.title },
+      { label: "方式", value: mode === "quick" ? "快速创建" : "自定义创建" }
+    ],
+    endpoints: [
+      {
+        label: "APP",
+        value: `http://localhost:${result.configuration.devServerPort}`
+      },
+      { label: "API", value: result.configuration.localBackendUrl }
+    ],
+    profile: profileRowsFor(result.category, result.features),
+    gitInitialized: result.gitInitialized,
+    installed: result.installed,
+    nextSteps,
+    configFiles: "project.config.json · .env*"
+  };
+}
+
+function row(label: string, value: string): string {
+  return `${ui.muted(`${label}  `)}${value}`;
+}
+
+function renderCompletion(
+  projectName: string,
+  mode: CreationMode,
+  result: GenerateProjectResult
+): void {
+  const view = buildCompletionView(projectName, mode, result);
+  prompts.log.message(
+    [
+      ui.strong(view.headline),
+      ...view.overview.map((item) => row(item.label, item.value))
+    ],
+    {
+      symbol: ui.success("◆"),
+      secondarySymbol: ui.muted("│"),
+      spacing: 1
+    }
+  );
+  prompts.log.message(
+    [
+      ui.strong("本地服务"),
+      ...view.endpoints.map((item) => row(item.label, ui.accent(item.value)))
+    ],
+    {
+      symbol: ui.accent("◇"),
+      secondarySymbol: ui.muted("│"),
+      spacing: 1
+    }
+  );
+  const gitStatus = view.gitInitialized
+    ? ui.success("Git main 已初始化")
+    : ui.muted("Git 未初始化");
+  const dependencyStatus = view.installed
+    ? ui.success("依赖已安装")
+    : ui.warning("依赖待安装");
+  prompts.log.message(
+    [
+      ui.strong("工程配置"),
+      ...view.profile.map((item) => row(item.label, item.value)),
+      row("状态", `${gitStatus} ${ui.muted("·")} ${dependencyStatus}`)
+    ],
+    {
+      symbol: ui.secondary("◇"),
+      secondarySymbol: ui.muted("│"),
+      spacing: 1
+    }
+  );
+  prompts.outro(`${ui.success("READY")} ${ui.muted("· 项目已准备就绪")}`);
+  prompts.box(
+    [
+      "",
+      ...view.nextSteps.map(
+        (command, index) =>
+          ` ${ui.muted(String(index + 1).padStart(2, "0"))}  ${ui.command(command)}`
+      ),
+      "",
+      ` ${ui.muted("配置")}  ${ui.muted(view.configFiles)}`,
+      ""
+    ].join("\n"),
+    ui.accent(ui.strong(" NEXT STEPS ")),
+    {
+      rounded: true,
+      width: "auto",
+      titleAlign: "left",
+      titlePadding: 2,
+      contentPadding: 1,
+      withGuide: false,
+      formatBorder: (value) => ui.accent(value)
+    }
+  );
 }
 
 async function executeCreateCommand(
@@ -233,26 +336,16 @@ async function executeCreateCommand(
     return;
   }
 
-  prompts.box(
-    buildCompletionContent(projectName, mode, result),
-    styleText(["bold", "green"], " JH4J 项目已就绪 "),
-    {
-      rounded: true,
-      width: "auto",
-      titleAlign: "center",
-      withGuide: false,
-      formatBorder: (value) => styleText("green", value)
-    }
-  );
-  prompts.outro(styleText("green", "创建完成，按上面的步骤启动项目"));
+  renderCompletion(projectName, mode, result);
 }
 
 export async function createCommand(
   requestedName: string | undefined,
   options: CreateOptions
 ): Promise<void> {
-  const brand = styleText(["bold", "black", "bgCyan"], " JH4J CLOUD ");
-  prompts.intro(`${brand}  创建标准项目`);
+  prompts.intro(
+    `${ui.brand()}  ${ui.badge("CREATE")}  ${ui.muted(`v${CLI_VERSION}`)}`
+  );
   try {
     await executeCreateCommand(requestedName, options);
   } catch (error) {

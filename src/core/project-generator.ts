@@ -4,6 +4,7 @@ import path from "node:path";
 import * as prompts from "@clack/prompts";
 import { satisfies } from "semver";
 import { CLI_NAME, CLI_VERSION } from "../constants.js";
+import { createBrandSpinner, ui } from "../ui/theme.js";
 import {
   copyTemplateTree,
   isDirectoryEmpty,
@@ -187,25 +188,29 @@ async function collectProjectInput(
   }
 
   if (options.customize && !options.yes) {
-    title = await askText("应用标题", title, (value) =>
+    title = await askText(ui.strong("应用标题"), title, (value) =>
       value?.trim() ? undefined : "应用标题不能为空"
     );
-    port = await askText("开发端口", String(port), (value) => {
+    port = await askText(ui.strong("开发端口"), String(port), (value) => {
       const parsed = Number(value);
       return Number.isInteger(parsed) && parsed >= 1024 && parsed <= 65535
         ? undefined
         : "请输入 1024 到 65535 之间的端口";
     });
-    localBackendUrl = await askText("本地联调地址", localBackendUrl, (value) => {
-      try {
-        const url = new URL(value ?? "");
-        return url.protocol === "http:" || url.protocol === "https:"
-          ? undefined
-          : "请输入完整的 http/https 地址";
-      } catch {
-        return "请输入完整的 http/https 地址";
+    localBackendUrl = await askText(
+      ui.strong("本地联调地址"),
+      localBackendUrl,
+      (value) => {
+        try {
+          const url = new URL(value ?? "");
+          return url.protocol === "http:" || url.protocol === "https:"
+            ? undefined
+            : "请输入完整的 http/https 地址";
+        } catch {
+          return "请输入完整的 http/https 地址";
+        }
       }
-    });
+    );
   }
 
   if (!title.trim()) throw new Error("系统标题不能为空");
@@ -314,7 +319,7 @@ export async function generateProject(
   );
   const acquisitionSpinner = options.yes
     ? undefined
-    : prompts.spinner({ indicator: "dots" });
+    : createBrandSpinner();
   acquisitionSpinner?.start("正在获取并校验模板");
   let acquired: Awaited<ReturnType<typeof acquireTemplateFromSources>>;
   try {
@@ -404,7 +409,7 @@ export async function generateProject(
 
     generationSpinner = options.yes
       ? undefined
-      : prompts.spinner({ indicator: "dots" });
+      : createBrandSpinner();
     generationSpinner?.start("正在生成项目文件");
     await copyTemplateTree(acquired.root, stagingRoot);
     const inputFile = path.join(stagingRoot, ".jh4j-cli-input.json");
