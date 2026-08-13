@@ -45,7 +45,7 @@ export const BUILTIN_TEMPLATES: CatalogTemplate[] = [
       ? siblingMobileTemplatePath
       : remoteMobileTemplateSources[0],
     sources: remoteMobileTemplateSources,
-    defaultRef: "v1.6.0",
+    defaultRef: "v1.7.0",
     status: "beta",
     tags: ["vue", "vite", "vant", "h5", "mobile"]
   }

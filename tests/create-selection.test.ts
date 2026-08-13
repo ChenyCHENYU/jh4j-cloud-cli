@@ -35,7 +35,7 @@ const templates: CatalogTemplate[] = [
     description: "mobile",
     category: "mobile",
     defaultSource: ".",
-    defaultRef: "v1.6.0",
+    defaultRef: "v1.7.0",
     status: "beta"
   }
 ];
@@ -122,9 +122,9 @@ describe("template category selection", () => {
       targetRoot: "D:/workspace/jh4j-mobile-app",
       templateId: "mobile.robot-h5",
       templateName: "JH4J 移动端 H5 模板",
-      templateVersion: "1.6.0",
+      templateVersion: "1.7.0",
       category: "mobile",
-      source: "https://github.com/ChenyCHENYU/Robot_H5.git#v1.6.0",
+      source: "https://github.com/ChenyCHENYU/Robot_H5.git#v1.7.0",
       features: ["git-standards"],
       installed: false,
       gitInitialized: true,
@@ -140,7 +140,7 @@ describe("template category selection", () => {
 
     expect(view.overview).toContainEqual({
       label: "模板",
-      value: "JH4J 移动端 H5 模板 · v1.6.0"
+      value: "JH4J 移动端 H5 模板 · v1.7.0"
     });
     expect(view.profile).toContainEqual({
       label: "核心",

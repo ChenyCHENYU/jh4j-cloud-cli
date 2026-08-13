@@ -28,7 +28,7 @@ describe("template manifest", () => {
   it("loads the standalone mobile template contract", async () => {
     const manifest = await loadTemplateManifest(mobileTemplateRoot);
     expect(manifest.id).toBe("mobile.robot-h5");
-    expect(manifest.version).toBe("1.6.0");
+    expect(manifest.version).toBe("1.7.0");
     expect(manifest.category).toBe("mobile");
     expect(manifest.runtime.recommendedNode).toBe("24");
     expect(manifest.features?.[0]).toMatchObject({
@@ -41,6 +41,6 @@ describe("template manifest", () => {
   it("loads the built-in catalog", async () => {
     const catalog = await loadCatalog();
     expect(findTemplate(catalog).id).toBe("web.jh4j-mf-remote");
-    expect(findTemplate(catalog, "mobile.robot-h5").defaultRef).toBe("v1.6.0");
+    expect(findTemplate(catalog, "mobile.robot-h5").defaultRef).toBe("v1.7.0");
   });
 });
