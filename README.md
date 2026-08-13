@@ -2,7 +2,7 @@
 
 JH4J Cloud 团队项目脚手架，用于从受控模板快速创建结构一致、配置完整、可追溯的工程。
 
-当前版本：`@agile-team/jh4j-cloud-cli@0.6.2`。
+当前版本：`@agile-team/jh4j-cloud-cli@0.6.3`。
 
 ## 核心能力
 
@@ -239,7 +239,7 @@ https://github.com/ChenyCHENYU/jh4j-ui-template.git
 → https://gitee.com/ycyplus163/jh4j-ui-template.git
 ```
 
-移动端模板按以下顺序尝试，并默认固定到 `v1.7.0`（内置 PDA 旧 WebView 兼容、wl-mbase 单头部/动态标题与 App/PDA 双向返回导航）：
+移动端模板按以下顺序尝试，并默认固定到 `v1.7.1`（内置 PDA 旧 WebView 兼容、wl-mbase 单头部/动态标题、App/PDA 双向返回导航，以及 `@robot-h5/core@^1.1.4` 严格桥接与 App SDK 按需加载）：
 
 ```text
 https://github.com/ChenyCHENYU/Robot_H5.git
