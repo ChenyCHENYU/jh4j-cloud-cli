@@ -1,7 +1,7 @@
 import {
   clearTemplateCache,
   getTemplateCacheRoot,
-  listTemplateCache
+  listTemplateCache,
 } from "../core/template-cache.js";
 
 function formatBytes(bytes: number): string {
@@ -10,8 +10,11 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
 
-export async function cacheListCommand(options: { json?: boolean } = {}): Promise<void> {
-  const entries = await listTemplateCache();
+export async function cacheListCommand(
+  options: { json?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<void> {
+  const entries = await listTemplateCache(signal);
   if (options.json) {
     console.log(JSON.stringify(entries, null, 2));
     return;
@@ -26,12 +29,12 @@ export async function cacheListCommand(options: { json?: boolean } = {}): Promis
       来源: entry.metadata.source,
       Ref: entry.metadata.ref,
       缓存时间: entry.metadata.cachedAt,
-      大小: formatBytes(entry.sizeBytes)
-    }))
+      大小: formatBytes(entry.sizeBytes),
+    })),
   );
 }
 
-export async function cacheClearCommand(): Promise<void> {
-  await clearTemplateCache();
+export async function cacheClearCommand(signal?: AbortSignal): Promise<void> {
+  await clearTemplateCache(signal);
   console.log(`模板缓存已清理: ${getTemplateCacheRoot()}`);
 }

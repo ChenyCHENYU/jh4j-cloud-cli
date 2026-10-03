@@ -37,10 +37,34 @@ export interface TemplateManifest {
   defaults: TemplateDefaults;
   features?: TemplateFeature[];
   entry: {
-    interactive: string;
-    nonInteractive: string;
+    interactive?: string | TemplateEntry;
+    nonInteractive: string | TemplateEntry;
   };
   generatedMetadata: string;
+  parameters?: TemplateParameter[];
+  display?: {
+    techStack?: string[];
+    corePackages?: string[];
+    startScript?: string;
+  };
+}
+
+export interface TemplateParameter {
+  name: string;
+  type: "string" | "number" | "boolean";
+  required?: boolean;
+  default?: string | number | boolean;
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  format?: "uri";
+  enum?: Array<string | number | boolean>;
+  [key: string]: unknown;
+}
+
+export interface TemplateEntry {
+  script: string;
+  args?: string[];
 }
 
 export interface CatalogTemplate {
@@ -109,6 +133,13 @@ export interface CreateOptions {
   force?: boolean;
   cache?: boolean;
   customize?: boolean;
+  input?: boolean;
+  json?: boolean;
+  quiet?: boolean;
+  verbose?: boolean;
+  offline?: boolean;
+  timeout?: string;
+  saveConfig?: string;
 }
 
 export interface ProjectMetadata {
@@ -118,6 +149,15 @@ export interface ProjectMetadata {
   createdAt: string;
   createdBy: string;
   parameters: Record<string, unknown>;
+  provenance?: TemplateProvenance;
+}
+
+export interface TemplateProvenance {
+  source: string;
+  ref: string | null;
+  commit: string | null;
+  archiveSha256?: string;
+  cached: boolean;
 }
 
 export interface TemplateCacheMetadata {
@@ -127,4 +167,7 @@ export interface TemplateCacheMetadata {
   cachedAt: string;
   templateId?: string;
   templateVersion?: string;
+  commit?: string | null;
+  archiveSha256?: string;
+  sizeBytes?: number;
 }

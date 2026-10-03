@@ -1,14 +1,54 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { collectDoctorChecks } from "../src/commands/doctor.js";
-
+import { DEFAULT_USER_CONFIG } from "../src/core/user-config.js";
+import { fixtureRoot, mobileFixtureRoot, temporaryRoot } from "./helpers.js";
+vi.mock("../src/utils/process.js", () => ({
+  inspectCommand: vi.fn(async (command: string) => ({
+    ok: true,
+    output: command === "pnpm" ? "11.8.0" : "git version 2.40.0",
+  })),
+}));
 describe("doctor", () => {
-  it("recognizes the local development environment", async () => {
-    const checks = await collectDoctorChecks();
+  it("validates supplied fixtures without requiring neighboring repositories", async () => {
+    vi.stubEnv("JH4J_HOME", await temporaryRoot());
+    const checks = await collectDoctorChecks(DEFAULT_USER_CONFIG, [
+      {
+        id: "web.jh4j-mf-remote",
+        name: "PC",
+        description: "PC",
+        category: "frontend",
+        defaultSource: fixtureRoot,
+        defaultRef: "main",
+        status: "stable",
+      },
+      {
+        id: "mobile.robot-h5",
+        name: "Mobile",
+        description: "Mobile",
+        category: "mobile",
+        defaultSource: mobileFixtureRoot,
+        defaultRef: "main",
+        status: "stable",
+      },
+    ]);
     expect(checks).toHaveLength(6);
     expect(checks.every((check) => check.ok)).toBe(true);
-    expect(checks.map((check) => check.name)).toContain(
-      "模板 web.jh4j-mf-remote"
-    );
-    expect(checks.map((check) => check.name)).toContain("模板 mobile.robot-h5");
+    vi.unstubAllEnvs();
+  });
+  it("marks untested remote sources as unchecked", async () => {
+    vi.stubEnv("JH4J_HOME", await temporaryRoot());
+    const checks = await collectDoctorChecks(DEFAULT_USER_CONFIG, [
+      {
+        id: "web.remote",
+        name: "Remote",
+        description: "Remote",
+        category: "frontend",
+        defaultSource: "https://example.invalid/template.git",
+        defaultRef: "main",
+        status: "stable",
+      },
+    ]);
+    expect(checks.at(-1)).toMatchObject({ ok: null, status: "unchecked" });
+    vi.unstubAllEnvs();
   });
 });

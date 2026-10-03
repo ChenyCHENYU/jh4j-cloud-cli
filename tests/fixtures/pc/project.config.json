@@ -1,0 +1,33 @@
+{
+  "projectName": "jh4j-ui-app",
+  "moduleName": "app",
+  "title": "Test PC",
+  "devServerPort": 8001,
+  "localBackendUrl": "http://localhost:10010",
+  "localPublicUrl": "http://localhost:8002",
+  "npmRegistry": "https://registry.npmjs.org",
+  "jhlcRegistry": "https://registry.npmjs.org",
+  "features": ["git-standards"],
+  "environments": {
+    "dev": {
+      "webUrl": "http://localhost:8080",
+      "apiPrefix": "dev-api"
+    },
+    "sit": {
+      "webUrl": "http://localhost:8080",
+      "apiPrefix": "sit-api"
+    },
+    "uat": {
+      "webUrl": "http://localhost:8080",
+      "apiPrefix": "uat-api"
+    },
+    "pre": {
+      "webUrl": "http://localhost:8080",
+      "apiPrefix": "pre-api"
+    },
+    "prd": {
+      "webUrl": "http://localhost:8080",
+      "apiPrefix": "prd-api"
+    }
+  }
+}

@@ -3,17 +3,21 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { JH4J_HOME_ENV, USER_CONFIG_SCHEMA_VERSION } from "../constants.js";
 import { readJson, writeJson } from "../utils/fs.js";
+import { validateUserConfig } from "./validation.js";
+import { withFileLock } from "../utils/file-lock.js";
 import type { UserConfig } from "../types.js";
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   schemaVersion: USER_CONFIG_SCHEMA_VERSION,
   autoInstall: false,
   autoGit: true,
-  cacheTtlMinutes: 60
+  cacheTtlMinutes: 60,
 };
 
 export function getJh4jHome(): string {
-  return path.resolve(process.env[JH4J_HOME_ENV] || path.join(os.homedir(), ".jh4j"));
+  return path.resolve(
+    process.env[JH4J_HOME_ENV] || path.join(os.homedir(), ".jh4j"),
+  );
 }
 
 export function getUserConfigPath(): string {
@@ -25,21 +29,15 @@ export async function loadUserConfig(): Promise<UserConfig> {
   if (!existsSync(configPath)) return { ...DEFAULT_USER_CONFIG };
 
   const stored = await readJson<Partial<UserConfig>>(configPath);
-  if (
-    stored.schemaVersion !== undefined &&
-    stored.schemaVersion !== USER_CONFIG_SCHEMA_VERSION
-  ) {
-    throw new Error(
-      `不支持的用户配置版本: ${stored.schemaVersion}，当前要求 ${USER_CONFIG_SCHEMA_VERSION}`
-    );
-  }
+  validateUserConfig(stored);
   return { ...DEFAULT_USER_CONFIG, ...stored };
 }
 
 export async function saveUserConfig(config: UserConfig): Promise<void> {
+  validateUserConfig(config);
   await writeJson(getUserConfigPath(), {
     ...config,
-    schemaVersion: USER_CONFIG_SCHEMA_VERSION
+    schemaVersion: USER_CONFIG_SCHEMA_VERSION,
   });
 }
 
@@ -51,12 +49,12 @@ const CONFIG_KEYS = new Set<keyof UserConfig>([
   "jhlcRegistry",
   "autoInstall",
   "autoGit",
-  "cacheTtlMinutes"
+  "cacheTtlMinutes",
 ]);
 
 export function parseUserConfigValue(
   key: string,
-  rawValue: string
+  rawValue: string,
 ): [keyof UserConfig, UserConfig[keyof UserConfig]] {
   if (!CONFIG_KEYS.has(key as keyof UserConfig)) {
     throw new Error(`不支持的配置项: ${key}`);
@@ -77,4 +75,20 @@ export function parseUserConfigValue(
     return [typedKey, value];
   }
   return [typedKey, rawValue.trim()];
+}
+
+export async function updateUserConfig(
+  update: (config: UserConfig) => UserConfig,
+  options: { reset?: boolean; signal?: AbortSignal } = {},
+): Promise<void> {
+  await withFileLock(
+    `${getUserConfigPath()}.lock`,
+    async () =>
+      saveUserConfig(
+        update(
+          options.reset ? { ...DEFAULT_USER_CONFIG } : await loadUserConfig(),
+        ),
+      ),
+    { signal: options.signal },
+  );
 }

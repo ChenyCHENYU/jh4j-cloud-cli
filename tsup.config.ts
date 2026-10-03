@@ -10,6 +10,6 @@ export default defineConfig({
   target: "node22",
   platform: "node",
   banner: {
-    js: "#!/usr/bin/env node"
-  }
+    js: "#!/usr/bin/env node",
+  },
 });

@@ -6,7 +6,7 @@ import {
   DEFAULT_USER_CONFIG,
   loadUserConfig,
   parseUserConfigValue,
-  saveUserConfig
+  saveUserConfig,
 } from "../src/core/user-config.js";
 
 let temporaryRoot: string | undefined;
@@ -24,16 +24,23 @@ describe("user config", () => {
 
     expect(await loadUserConfig()).toEqual(DEFAULT_USER_CONFIG);
     expect(DEFAULT_USER_CONFIG.autoInstall).toBe(false);
-    const config = { ...(await loadUserConfig()), autoInstall: false, cacheTtlMinutes: 120 };
+    const config = {
+      ...(await loadUserConfig()),
+      autoInstall: false,
+      cacheTtlMinutes: 120,
+    };
     await saveUserConfig(config);
     expect(await loadUserConfig()).toEqual(config);
   });
 
   it("parses boolean and numeric values safely", () => {
-    expect(parseUserConfigValue("autoGit", "false")).toEqual(["autoGit", false]);
+    expect(parseUserConfigValue("autoGit", "false")).toEqual([
+      "autoGit",
+      false,
+    ]);
     expect(parseUserConfigValue("cacheTtlMinutes", "30")).toEqual([
       "cacheTtlMinutes",
-      30
+      30,
     ]);
     expect(() => parseUserConfigValue("autoGit", "maybe")).toThrow();
     expect(() => parseUserConfigValue("unknown", "value")).toThrow();

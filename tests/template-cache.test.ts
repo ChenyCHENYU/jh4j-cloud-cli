@@ -9,12 +9,13 @@ import { copyTemplateTree } from "../src/utils/fs.js";
 import { runCommand } from "../src/utils/process.js";
 import {
   acquireTemplate,
-  acquireTemplateFromSources
+  acquireTemplateFromSources,
 } from "../src/core/template-source.js";
 import { listTemplateCache } from "../src/core/template-cache.js";
 
 let temporaryRoot: string | undefined;
-const sourceTemplate = path.resolve("../jh4j-ui-template");
+import { fixtureRoot } from "./helpers.js";
+const sourceTemplate = fixtureRoot;
 
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -30,26 +31,47 @@ describe("template cache", () => {
     vi.stubEnv("JH4J_HOME", path.join(temporaryRoot, "home"));
     const repository = path.join(temporaryRoot, "template-repository");
     await copyTemplateTree(sourceTemplate, repository);
-    await runCommand("git", ["init", "-b", "main"], { cwd: repository, stdio: "pipe" });
-    await runCommand("git", ["add", "-A"], { cwd: repository, stdio: "pipe" });
-    await runCommand("git", ["commit", "-m", "test template"], {
+    await runCommand("git", ["init", "-b", "main"], {
       cwd: repository,
-      stdio: "pipe"
+      stdio: "pipe",
     });
+    await runCommand("git", ["add", "-A"], { cwd: repository, stdio: "pipe" });
+    await runCommand(
+      "git",
+      [
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-m",
+        "test template",
+      ],
+      {
+        cwd: repository,
+        stdio: "pipe",
+      },
+    );
 
     const source = pathToFileURL(repository).href;
     const first = await acquireTemplateFromSources(
       [path.join(temporaryRoot, "missing-template"), source],
       "main",
       {
-      noCache: true,
-      cacheTtlMinutes: 60
-      }
+        noCache: true,
+        cacheTtlMinutes: 60,
+      },
     );
     expect(first.source).toBe(`${source}#main`);
-    const second = await acquireTemplate(source, "main", { cacheTtlMinutes: 60 });
+    const second = await acquireTemplate(source, "main", {
+      cacheTtlMinutes: 60,
+    });
     expect(second.source).toContain("(cache)");
     expect(await listTemplateCache()).toHaveLength(1);
+    await first.cleanup();
+    await second.cleanup();
   });
 
   it("extracts and caches an offline template archive", async () => {
@@ -58,17 +80,19 @@ describe("template cache", () => {
     const packedDirectory = path.join(temporaryRoot, "packed-template");
     await copyTemplateTree(sourceTemplate, packedDirectory);
     const archive = path.join(temporaryRoot, "jh4j-ui-template.tgz");
-    await createTar(
-      { gzip: true, file: archive, cwd: temporaryRoot },
-      [path.basename(packedDirectory)]
-    );
+    await createTar({ gzip: true, file: archive, cwd: temporaryRoot }, [
+      path.basename(packedDirectory),
+    ]);
 
     const acquired = await acquireTemplate(archive, "main", {
       noCache: true,
-      cacheTtlMinutes: 60
+      cacheTtlMinutes: 60,
     });
-    expect(existsSync(path.join(acquired.root, "template.manifest.json"))).toBe(true);
+    expect(existsSync(path.join(acquired.root, "template.manifest.json"))).toBe(
+      true,
+    );
     expect(acquired.source).toContain("(archive)");
+    await acquired.cleanup();
     expect(await listTemplateCache()).toHaveLength(1);
   });
 });

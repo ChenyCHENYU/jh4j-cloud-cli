@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "mobile.robot-h5",
+  "name": "Fixture mobile",
+  "description": "Independent test template",
+  "version": "1.0.0",
+  "category": "mobile",
+  "runtime": {
+    "node": "^22.12.0 || ^24.0.0",
+    "recommendedNode": "24",
+    "packageManager": "pnpm@11.8.0"
+  },
+  "defaults": {
+    "projectName": "jh4j-mobile-app",
+    "moduleName": "app",
+    "title": "Test Mobile",
+    "devServerPort": 8888,
+    "localBackendUrl": "http://localhost:10010",
+    "localPublicUrl": "http://localhost:8002",
+    "npmRegistry": "https://registry.npmjs.org",
+    "jhlcRegistry": "https://registry.npmjs.org"
+  },
+  "features": [
+    {
+      "id": "git-standards",
+      "name": "Git standards",
+      "description": "Test standards",
+      "defaultEnabled": true,
+      "required": false,
+      "package": "@robot-admin/git-standards"
+    }
+  ],
+  "entry": {
+    "nonInteractive": {
+      "script": "scripts/setup-project.mjs",
+      "args": ["--yes"]
+    }
+  },
+  "generatedMetadata": ".jhlc/project.json",
+  "parameters": [
+    {
+      "name": "projectName",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "devServerPort",
+      "type": "number",
+      "required": true
+    }
+  ],
+  "display": {
+    "techStack": ["Vue 3", "TypeScript"],
+    "corePackages": ["@robot-h5/core"],
+    "startScript": "dev"
+  }
+}

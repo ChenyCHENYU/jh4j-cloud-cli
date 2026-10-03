@@ -1,0 +1,11 @@
+{
+  "name": "fixture-pc",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"console.log('dev')\""
+  },
+  "devDependencies": {
+    "@robot-admin/git-standards": "0.0.0"
+  }
+}

@@ -28,7 +28,7 @@ describe("external catalog", () => {
           defaultSource: "./pc-template",
           sources: ["./pc-template-backup", "https://git.example/pc.git"],
           defaultRef: "v1.0.0",
-          status: "stable"
+          status: "stable",
         },
         {
           id: "service.jh4j-spring-cloud",
@@ -37,31 +37,31 @@ describe("external catalog", () => {
           category: "backend",
           defaultSource: "https://git.example/service.git",
           defaultRef: "main",
-          status: "beta"
-        }
-      ]
+          status: "beta",
+        },
+      ],
     });
 
     const catalog = await loadCatalog({
       ...DEFAULT_USER_CONFIG,
-      catalogFile
+      catalogFile,
     });
     expect(catalog).toHaveLength(3);
     const pcTemplate = findTemplate(catalog, "web.jh4j-mf-remote");
     expect(pcTemplate.status).toBe("stable");
     expect(pcTemplate.defaultSource).toBe(
-      path.join(temporaryRoot, "pc-template")
+      path.join(temporaryRoot, "pc-template"),
     );
     expect(pcTemplate.sources).toEqual([
       path.join(temporaryRoot, "pc-template-backup"),
-      "https://git.example/pc.git"
+      "https://git.example/pc.git",
     ]);
     expect(findTemplate(catalog, "service.jh4j-spring-cloud").category).toBe(
-      "backend"
+      "backend",
     );
     expect(findTemplate(catalog, "mobile.robot-h5").sources).toEqual([
       "https://github.com/ChenyCHENYU/Robot_H5.git",
-      "https://gitee.com/ycyplus163/robot_-h5.git"
+      "https://gitee.com/ycyplus163/robot_-h5.git",
     ]);
   });
 });

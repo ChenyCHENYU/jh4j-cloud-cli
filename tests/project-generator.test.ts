@@ -1,21 +1,23 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findTemplate, loadCatalog } from "../src/catalog.js";
 import {
   generateProject,
-  normalizeProjectName
+  normalizeProjectName,
 } from "../src/core/project-generator.js";
 
+import { fixtureRoot, mobileFixtureRoot } from "./helpers.js";
+import { CLI_NAME, CLI_VERSION } from "../src/constants.js";
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
-    temporaryRoots.splice(0).map((root) =>
-      rm(root, { recursive: true, force: true, maxRetries: 3 })
-    )
+    temporaryRoots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 3 })),
   );
 });
 
@@ -31,7 +33,11 @@ describe("project generator", () => {
     temporaryRoots.push(cwd);
 
     const result = await generateProject(
-      findTemplate(await loadCatalog()),
+      {
+        ...findTemplate(await loadCatalog()),
+        defaultSource: fixtureRoot,
+        sources: [],
+      },
       "jh4j-ui-orders",
       {
         yes: true,
@@ -39,31 +45,33 @@ describe("project generator", () => {
         title: "订单中心",
         port: "8123",
         skipInstall: true,
-        skipGit: true
+        skipGit: true,
       },
-      cwd
+      cwd,
     );
 
     const target = path.join(cwd, "jh4j-ui-orders");
     const config = JSON.parse(
-      await readFile(path.join(target, "project.config.json"), "utf8")
+      await readFile(path.join(target, "project.config.json"), "utf8"),
     );
     const metadata = JSON.parse(
-      await readFile(path.join(target, ".jhlc", "project.json"), "utf8")
+      await readFile(path.join(target, ".jhlc", "project.json"), "utf8"),
     );
 
-    expect(result.targetRoot).toBe(target);
+    expect(result.targetRoot).toBe(await realpath(target));
     expect(config.moduleName).toBe("orders");
     expect(config.title).toBe("订单中心");
     expect(config.devServerPort).toBe(8123);
     expect(metadata.template).toEqual({
       id: "web.jh4j-mf-remote",
-      version: "1.1.0"
+      version: "1.0.0",
     });
-    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.6.3");
+    expect(metadata.createdBy).toBe(`${CLI_NAME}@${CLI_VERSION}`);
     expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(existsSync(path.join(target, "src", "views", "orders"))).toBe(true);
-    expect(existsSync(path.join(target, "src", "views", "template"))).toBe(false);
+    expect(existsSync(path.join(target, "src", "views", "template"))).toBe(
+      false,
+    );
     expect(existsSync(path.join(target, "node_modules"))).toBe(false);
     expect(existsSync(path.join(target, ".git"))).toBe(false);
   });
@@ -73,19 +81,23 @@ describe("project generator", () => {
     temporaryRoots.push(cwd);
 
     const result = await generateProject(
-      findTemplate(await loadCatalog()),
+      {
+        ...findTemplate(await loadCatalog()),
+        defaultSource: fixtureRoot,
+        sources: [],
+      },
       "jh4j-ui-plain",
       {
         yes: true,
         standards: false,
         skipInstall: true,
-        skipGit: true
+        skipGit: true,
       },
-      cwd
+      cwd,
     );
     const target = path.join(cwd, "jh4j-ui-plain");
     const pkg = JSON.parse(
-      await readFile(path.join(target, "package.json"), "utf8")
+      await readFile(path.join(target, "package.json"), "utf8"),
     );
 
     expect(result.features).toEqual([]);
@@ -98,7 +110,11 @@ describe("project generator", () => {
   it("creates a configured mobile H5 project", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "jh4j-cli-mobile-"));
     temporaryRoots.push(cwd);
-    const mobileTemplate = findTemplate(await loadCatalog(), "mobile.robot-h5");
+    const mobileTemplate = {
+      ...findTemplate(await loadCatalog(), "mobile.robot-h5"),
+      defaultSource: mobileFixtureRoot,
+      sources: [],
+    };
 
     const result = await generateProject(
       mobileTemplate,
@@ -109,28 +125,28 @@ describe("project generator", () => {
         port: "8899",
         localBackend: "http://localhost:18080",
         skipInstall: true,
-        skipGit: true
+        skipGit: true,
       },
-      cwd
+      cwd,
     );
     const target = path.join(cwd, "jh4j-mobile-orders");
     const config = JSON.parse(
-      await readFile(path.join(target, "project.config.json"), "utf8")
+      await readFile(path.join(target, "project.config.json"), "utf8"),
     );
     const metadata = JSON.parse(
-      await readFile(path.join(target, ".jhlc", "project.json"), "utf8")
+      await readFile(path.join(target, ".jhlc", "project.json"), "utf8"),
     );
     const developmentEnv = await readFile(
       path.join(target, ".env.development"),
-      "utf8"
+      "utf8",
     );
 
     expect(result.templateId).toBe("mobile.robot-h5");
-    expect(result.templateVersion).toBe("1.7.1");
+    expect(result.templateVersion).toBe("1.0.0");
     expect(config.projectName).toBe("jh4j-mobile-orders");
     expect(config.title).toBe("移动订单中心");
     expect(config.devServerPort).toBe(8899);
-    expect(metadata.createdBy).toBe("@agile-team/jh4j-cloud-cli@0.6.3");
+    expect(metadata.createdBy).toBe(`${CLI_NAME}@${CLI_VERSION}`);
     expect(metadata.parameters.features).toEqual(["git-standards"]);
     expect(developmentEnv).toContain("VITE_PORT = 8899");
     expect(developmentEnv).toContain("VITE_GLOB_APP_ID = jh4j-mobile-orders");
@@ -144,10 +160,14 @@ describe("project generator", () => {
     temporaryRoots.push(cwd);
 
     await generateProject(
-      findTemplate(await loadCatalog()),
+      {
+        ...findTemplate(await loadCatalog()),
+        defaultSource: fixtureRoot,
+        sources: [],
+      },
       "jh4j-ui-preview",
       { yes: true, dryRun: true, skipInstall: true, skipGit: true },
-      cwd
+      cwd,
     );
 
     expect(existsSync(path.join(cwd, "jh4j-ui-preview"))).toBe(false);
@@ -166,35 +186,39 @@ describe("project generator", () => {
         environments: {
           sit: {
             webUrl: "https://sit.example.internal",
-            apiPrefix: "custom-sit-api"
-          }
-        }
+            apiPrefix: "custom-sit-api",
+          },
+        },
       }),
-      "utf8"
+      "utf8",
     );
 
     await generateProject(
-      findTemplate(await loadCatalog()),
+      {
+        ...findTemplate(await loadCatalog()),
+        defaultSource: fixtureRoot,
+        sources: [],
+      },
       "jh4j-ui-configured",
       {
         yes: true,
         config: configFile,
         skipInstall: true,
-        skipGit: true
+        skipGit: true,
       },
-      cwd
+      cwd,
     );
     const generated = JSON.parse(
       await readFile(
         path.join(cwd, "jh4j-ui-configured", "project.config.json"),
-        "utf8"
-      )
+        "utf8",
+      ),
     );
     expect(generated.moduleName).toBe("configured");
     expect(generated.title).toBe("配置文件项目");
     expect(generated.environments.sit).toEqual({
       webUrl: "https://sit.example.internal",
-      apiPrefix: "custom-sit-api"
+      apiPrefix: "custom-sit-api",
     });
   });
 });
